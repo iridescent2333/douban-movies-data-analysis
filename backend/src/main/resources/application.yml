@@ -1,0 +1,71 @@
+# ============================================================
+# 豆瓣电影数据洞察看板 - Spring Boot 主配置
+#
+# 【安全约定】本文件不含任何真实凭据，敏感项全部通过环境变量注入。
+# 配置优先级：环境变量  >  application-local.yml（本地，不入库）  >  本文件默认值
+#
+# 本地运行两种方式（二选一）：
+#   方式 A：复制 application-local.yml.example → application-local.yml，填自己的数据库账号密码
+#   方式 B：设置系统环境变量 DB_USERNAME / DB_PASSWORD / DB_HOST / DB_PORT / DB_NAME
+#
+# 注意：默认已激活 local 配置文件，若 application-local.yml 不存在，
+#       Spring Boot 会静默跳过，此时回退到环境变量或本文件默认值。
+# ============================================================
+
+spring:
+  application:
+    name: movie-dashboard
+
+  # 默认启用本地配置文件（application-local.yml 已被 .gitignore 排除）
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  # ---------- 数据源：MySQL 8.0 ----------
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:movie_dashboard}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=utf8
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    # HikariCP 连接池：复用连接，避免每次请求新建连接
+    hikari:
+      pool-name: MovieDashboardHikariPool
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: 2
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 600000
+
+  # ---------- JPA / Hibernate ----------
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      # update：首次启动自动建表，之后增量更新；生产环境建议改为 validate
+      ddl-auto: ${DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 50
+    open-in-view: false
+
+  # 建表由 Hibernate 负责，初始数据由 DataInitializer 从 CSV 加载，不走 sql.init
+  sql:
+    init:
+      mode: never
+
+# ---------- HTTP 服务 ----------
+# 端口为非敏感信息，直接写死以保证与 nginx.conf 的 proxy_pass 严格一致；
+# （曾尝试 ${SERVER_PORT:8081}，结果被操作系统同名环境变量 SERVER__PORT 覆盖，故保持字面量）
+server:
+  port: 8081
+  error:
+    # 出错时给前端可读的错误描述，但不暴露堆栈，避免信息泄漏
+    include-message: always
+    include-stacktrace: never
+
+# ---------- 日志 ----------
+logging:
+  level:
+    com.movie.dashboard: ${LOG_LEVEL:info}
+    org.hibernate.SQL: warn

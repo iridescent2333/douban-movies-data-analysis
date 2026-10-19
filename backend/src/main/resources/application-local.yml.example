@@ -1,0 +1,28 @@
+# ============================================================
+# 本地开发配置模板
+#
+# 用法：
+#   1. 复制本文件为同目录下的 application-local.yml
+#      （application-local.yml 已被 .gitignore 排除，不会进 GitHub）
+#   2. 填写你自己本机 MySQL 的真实账号密码
+#   3. 重启后端生效
+#
+# 不创建该文件也可以：直接设置同名的系统环境变量即可，环境变量优先级更高。
+# ============================================================
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/movie_dashboard?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=utf8
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # ↓↓↓ 改成你本机 MySQL 的账号密码 ↓↓↓
+    username: root
+    password: 你的数据库密码
+
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+server:
+  port: 8081
