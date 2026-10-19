@@ -1,0 +1,21 @@
+# Maven 编译输出
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.class
+
+# H2 数据库文件（持久化数据，但不纳入版本控制）
+data/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Maven Wrapper 启动脚本需要共享给组员（jar 已在 .mvn/wrapper/ 下允许提交）
+!.mvn/wrapper/maven-wrapper.jar
+!mvnw
+!mvnw.cmd
