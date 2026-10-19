@@ -1,0 +1,70 @@
+# =============================================================
+# 豆瓣电影数据洞察看板 - Nginx 部署配置（模板）
+#
+# 用法：
+#   1. 复制本文件到你的 Nginx 目录： <nginx>/conf/nginx.conf
+#      （本项目已自带 Nginx：frontend/nginx-1.26.2/conf/nginx.conf）
+#   2. 把下面 root 一行的 __YOUR_FRONTEND_DIST_PATH__ 改成你本机
+#      frontend/dist 目录的绝对路径（用正斜杠 /）
+#   3. 启动：cd <nginx> && nginx.exe
+#      重载：nginx.exe -s reload    停止：nginx.exe -s stop
+# =============================================================
+worker_processes  1;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    sendfile      on;
+    keepalive_timeout  65;
+
+    access_log  logs/access.log;
+    error_log   logs/error.log;
+
+    server {
+        listen       80;
+        server_name  localhost;
+
+        # ===== 前端静态文件根目录【改成你本机 frontend/dist 绝对路径】=====
+        # 示例：root D:/33333/2026web开发作业/04小组作业/movie-dashboard/frontend/dist;
+        root __YOUR_FRONTEND_DIST_PATH__;
+        index index.html;
+
+        # ===== API 反向代理（^~ 前缀匹配，最高优先级）=====
+        # 后端 Spring Boot 端口，与 backend/src/main/resources/application.yml 的 server.port 对齐（当前 8081）
+        location ^~ /api/ {
+            proxy_pass http://127.0.0.1:8081/api/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 30s;
+            proxy_connect_timeout 10s;
+        }
+
+        # ===== 静态资源缓存 7 天 =====
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
+            expires 7d;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # ===== 禁止访问隐藏文件 =====
+        location ~ /\. {
+            deny all;
+        }
+
+        # ===== SPA 前端路由 =====
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+    }
+}

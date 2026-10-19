@@ -1,0 +1,626 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "豆瓣电影数据洞察看板",
+    "version": "1.0.0",
+    "description": "基于 Spring Boot 3.2 + Vue 3 + ECharts 的豆瓣电影数据可视化看板后端 API。提供电影列表分页、详情、筛选器、年份趋势、类型对比、成本-票房散点、国家×类型热力、档期分析、导演 TOP N 共 9 个接口。"
+  },
+  "servers": [
+    {
+      "url": "http://localhost/api",
+      "description": "本地 Nginx 代理"
+    },
+    {
+      "url": "http://localhost:8080/api",
+      "description": "后端直连（开发环境）"
+    }
+  ],
+  "tags": [
+    {
+      "name": "电影数据",
+      "description": "电影列表、详情、筛选器下拉"
+    },
+    {
+      "name": "统计图表",
+      "description": "给看板各图表喂数据"
+    }
+  ],
+  "paths": {
+    "/movies": {
+      "get": {
+        "tags": ["电影数据"],
+        "operationId": "listMovies",
+        "summary": "电影列表（多条件筛选 + 分页）",
+        "description": "返回评分降序的分页电影数据，可按年份区间、类型、国家、评分区间、标题关键字组合过滤。",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码（从 0 起）",
+            "required": false,
+            "schema": { "type": "integer", "default": 0 },
+            "example": 0
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "每页大小",
+            "required": false,
+            "schema": { "type": "integer", "default": 20 },
+            "example": 12
+          },
+          {
+            "name": "yearStart",
+            "in": "query",
+            "description": "起始年份（含）",
+            "required": false,
+            "schema": { "type": "integer" },
+            "example": 2010
+          },
+          {
+            "name": "yearEnd",
+            "in": "query",
+            "description": "结束年份（含）",
+            "required": false,
+            "schema": { "type": "integer" },
+            "example": 2020
+          },
+          {
+            "name": "genres",
+            "in": "query",
+            "description": "类型名（多个可重复传参，AND 逻辑）",
+            "required": false,
+            "schema": { "type": "array", "items": { "type": "string" } },
+            "example": ["剧情", "犯罪"]
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "description": "制片国家/地区",
+            "required": false,
+            "schema": { "type": "string" },
+            "example": "美国"
+          },
+          {
+            "name": "ratingMin",
+            "in": "query",
+            "description": "最低评分",
+            "required": false,
+            "schema": { "type": "number" },
+            "example": 8.0
+          },
+          {
+            "name": "ratingMax",
+            "in": "query",
+            "description": "最高评分",
+            "required": false,
+            "schema": { "type": "number" },
+            "example": 10.0
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "description": "标题模糊关键字",
+            "required": false,
+            "schema": { "type": "string" },
+            "example": "肖申克"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultPageMovieDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": {
+                    "content": [
+                      {
+                        "id": 1,
+                        "title": "肖申克的救赎",
+                        "director": "弗兰克·德拉邦特",
+                        "leadActor": "蒂姆·罗宾斯",
+                        "country": "美国",
+                        "year": 1994,
+                        "duration": 142,
+                        "rating": 9.7,
+                        "voteCount": 2800000,
+                        "posterUrl": null,
+                        "genres": ["剧情", "犯罪"]
+                      }
+                    ],
+                    "pageable": { "pageNumber": 0, "pageSize": 12 },
+                    "totalElements": 850,
+                    "totalPages": 71,
+                    "size": 12,
+                    "number": 0,
+                    "empty": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/movies/filters": {
+      "get": {
+        "tags": ["电影数据"],
+        "operationId": "getFilters",
+        "summary": "筛选器下拉可选项",
+        "description": "返回所有可用的年份 / 国家 / 类型，供前端筛选控件初始化。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultFilterOptionsDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": {
+                    "years": [1980, 1990, 2000, 2010, 2020, 2024],
+                    "countries": ["美国", "中国大陆", "中国香港", "日本", "韩国", "英国"],
+                    "genres": ["剧情", "喜剧", "动作", "爱情", "科幻", "悬疑", "犯罪", "动画"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/movies/{id}": {
+      "get": {
+        "tags": ["电影数据"],
+        "operationId": "getMovieDetail",
+        "summary": "电影详情",
+        "description": "返回指定 id 电影的完整信息，包括类型列表和财务数据（若存在）。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "电影主键",
+            "required": true,
+            "schema": { "type": "integer" },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultMovieDetailDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": {
+                    "id": 1,
+                    "title": "肖申克的救赎",
+                    "director": "弗兰克·德拉邦特",
+                    "leadActor": "蒂姆·罗宾斯",
+                    "country": "美国",
+                    "year": 1994,
+                    "duration": 142,
+                    "rating": 9.7,
+                    "voteCount": 2800000,
+                    "intro": "20世纪40年代末，小有成就的青年银行家安迪因涉嫌杀害妻子及她的情人被判处终身监禁...",
+                    "posterUrl": null,
+                    "genres": ["剧情", "犯罪"],
+                    "financial": {
+                      "budgetWan": 2500.00,
+                      "boxOfficeWan": 1800.00,
+                      "releaseDate": "1994-09-23",
+                      "seasonTag": "秋季档"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/year-trend": {
+      "get": {
+        "tags": ["统计图表"],
+        "operationId": "yearTrend",
+        "summary": "年份趋势（折线图）",
+        "description": "按年份聚合，返回每年的电影数量、平均评分、平均票房。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultListYearTrendDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": [
+                    { "year": 1995, "count": 34, "avgRating": 6.94, "avgBoxOffice": 0.0 },
+                    { "year": 2000, "count": 45, "avgRating": 7.12, "avgBoxOffice": 1200.50 },
+                    { "year": 2015, "count": 128, "avgRating": 7.30, "avgBoxOffice": 5423.80 },
+                    { "year": 2023, "count": 210, "avgRating": 6.85, "avgBoxOffice": 8900.00 }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/genre-compare": {
+      "get": {
+        "tags": ["统计图表"],
+        "operationId": "genreCompare",
+        "summary": "类型对比（柱状/雷达图）",
+        "description": "按电影类型聚合，返回每类型的平均评分、平均票房和数量。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultListGenreCompareDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": [
+                    { "genre": "剧情", "avgRating": 7.30, "avgBoxOffice": 4872.50, "count": 312 },
+                    { "genre": "喜剧", "avgRating": 6.95, "avgBoxOffice": 6100.00, "count": 180 },
+                    { "genre": "科幻", "avgRating": 7.80, "avgBoxOffice": 12500.00, "count": 68 },
+                    { "genre": "动画", "avgRating": 7.55, "avgBoxOffice": 7200.00, "count": 95 }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/scatter-cost-box": {
+      "get": {
+        "tags": ["统计图表"],
+        "operationId": "scatterCostBox",
+        "summary": "成本 vs 票房散点图",
+        "description": "预算为横轴、票房为纵轴，每个点代表一部电影。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultListScatterPointDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": [
+                    { "budgetWan": 3000.00, "boxOfficeWan": 12000.00, "rating": 8.8, "title": "盗梦空间", "country": "美国" },
+                    { "budgetWan": 15000.00, "boxOfficeWan": 25000.00, "rating": 9.1, "title": "星际穿越", "country": "美国" },
+                    { "budgetWan": 500.00, "boxOfficeWan": 800.00, "rating": 7.2, "title": "路边野餐", "country": "中国大陆" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/heatmap": {
+      "get": {
+        "tags": ["统计图表"],
+        "operationId": "heatmap",
+        "summary": "国家 × 类型 热力图",
+        "description": "二维矩阵：国家为行、类型为列，值为平均评分。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultListHeatmapDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": [
+                    { "country": "美国", "genre": "剧情", "avgRating": 7.5, "count": 80 },
+                    { "country": "美国", "genre": "科幻", "avgRating": 8.3, "count": 42 },
+                    { "country": "日本", "genre": "动画", "avgRating": 8.6, "count": 55 },
+                    { "country": "中国大陆", "genre": "喜剧", "avgRating": 6.8, "count": 90 }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/season-analysis": {
+      "get": {
+        "tags": ["统计图表"],
+        "operationId": "seasonAnalysis",
+        "summary": "档期 × 类型 分析",
+        "description": "按档期标签 + 类型聚合，返回平均票房/评分/数量。",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultListSeasonAnalysisDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": [
+                    { "seasonTag": "春节档", "genre": "喜剧", "avgBoxOffice": 9800.00, "avgRating": 7.4, "count": 18 },
+                    { "seasonTag": "暑期档", "genre": "科幻", "avgBoxOffice": 15200.00, "avgRating": 7.8, "count": 12 },
+                    { "seasonTag": "国庆档", "genre": "剧情", "avgBoxOffice": 8500.00, "avgRating": 7.6, "count": 10 },
+                    { "seasonTag": "非档期", "genre": "爱情", "avgBoxOffice": 2300.00, "avgRating": 6.9, "count": 45 }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/top-directors": {
+      "get": {
+        "tags": ["统计图表"],
+        "operationId": "topDirectors",
+        "summary": "导演 TOP N",
+        "description": "按执导电影数降序返回前 N 位导演（默认 10）。",
+        "parameters": [
+          {
+            "name": "n",
+            "in": "query",
+            "description": "Top N，默认 10",
+            "required": false,
+            "schema": { "type": "integer", "default": 10 },
+            "example": 10
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ResultListDirectorTopDTO" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": [
+                    { "director": "张艺谋", "count": 12, "avgRating": 7.16 },
+                    { "director": "克里斯托弗·诺兰", "count": 10, "avgRating": 8.90 },
+                    { "director": "史蒂文·斯皮尔伯格", "count": 15, "avgRating": 8.20 },
+                    { "director": "宫崎骏", "count": 9, "avgRating": 9.10 }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MovieDTO": {
+        "type": "object",
+        "description": "电影列表项",
+        "properties": {
+          "id": { "type": "integer", "description": "电影主键", "example": 1 },
+          "title": { "type": "string", "description": "电影标题", "example": "肖申克的救赎" },
+          "director": { "type": "string", "description": "导演", "example": "弗兰克·德拉邦特" },
+          "leadActor": { "type": "string", "description": "主演" },
+          "country": { "type": "string", "description": "制片国家/地区", "example": "美国" },
+          "year": { "type": "integer", "description": "上映年份", "example": 1994 },
+          "duration": { "type": "integer", "description": "片长（分钟）", "example": 142 },
+          "rating": { "type": "number", "description": "豆瓣评分", "example": 9.7 },
+          "voteCount": { "type": "integer", "description": "评分人数", "example": 2800000 },
+          "posterUrl": { "type": "string", "nullable": true, "description": "海报 URL" },
+          "genres": { "type": "array", "items": { "type": "string" }, "description": "类型名称列表", "example": ["剧情", "犯罪"] }
+        }
+      },
+      "MovieDetailDTO": {
+        "type": "object",
+        "description": "电影详情",
+        "properties": {
+          "id": { "type": "integer", "description": "电影主键" },
+          "title": { "type": "string", "description": "电影标题" },
+          "director": { "type": "string", "description": "导演" },
+          "leadActor": { "type": "string", "description": "主演" },
+          "country": { "type": "string", "description": "制片国家/地区" },
+          "year": { "type": "integer", "description": "上映年份" },
+          "duration": { "type": "integer", "description": "片长（分钟）" },
+          "rating": { "type": "number", "description": "豆瓣评分" },
+          "voteCount": { "type": "integer", "description": "评分人数" },
+          "intro": { "type": "string", "description": "剧情简介" },
+          "posterUrl": { "type": "string", "nullable": true, "description": "海报 URL" },
+          "genres": { "type": "array", "items": { "type": "string" }, "description": "类型名称列表" },
+          "financial": { "$ref": "#/components/schemas/FinancialInfo" }
+        }
+      },
+      "FinancialInfo": {
+        "type": "object",
+        "description": "财务信息",
+        "nullable": true,
+        "properties": {
+          "budgetWan": { "type": "number", "description": "制作预算（万元）" },
+          "boxOfficeWan": { "type": "number", "description": "票房（万元）" },
+          "releaseDate": { "type": "string", "format": "date", "description": "上映日期" },
+          "seasonTag": { "type": "string", "description": "档期标签" }
+        }
+      },
+      "YearTrendDTO": {
+        "type": "object",
+        "description": "年份趋势点",
+        "properties": {
+          "year": { "type": "integer", "description": "年份", "example": 2015 },
+          "count": { "type": "integer", "format": "int64", "description": "当年电影数量", "example": 128 },
+          "avgRating": { "type": "number", "description": "当年平均评分", "example": 7.6 },
+          "avgBoxOffice": { "type": "number", "description": "当年平均票房（万元）", "example": 5423.80 }
+        }
+      },
+      "GenreCompareDTO": {
+        "type": "object",
+        "description": "类型对比统计",
+        "properties": {
+          "genre": { "type": "string", "description": "类型名", "example": "剧情" },
+          "avgRating": { "type": "number", "description": "该类型平均评分", "example": 8.1 },
+          "avgBoxOffice": { "type": "number", "description": "该类型平均票房（万元）", "example": 4872.50 },
+          "count": { "type": "integer", "format": "int64", "description": "电影数量", "example": 312 }
+        }
+      },
+      "ScatterPointDTO": {
+        "type": "object",
+        "description": "成本-票房散点",
+        "properties": {
+          "budgetWan": { "type": "number", "description": "制作预算（万元）", "example": 3000.00 },
+          "boxOfficeWan": { "type": "number", "description": "票房（万元）", "example": 12000.00 },
+          "rating": { "type": "number", "description": "豆瓣评分", "example": 8.5 },
+          "title": { "type": "string", "description": "电影标题", "example": "盗梦空间" },
+          "country": { "type": "string", "description": "制片国家/地区", "example": "美国" }
+        }
+      },
+      "HeatmapDTO": {
+        "type": "object",
+        "description": "国家-类型热力点",
+        "properties": {
+          "country": { "type": "string", "description": "国家/地区", "example": "美国" },
+          "genre": { "type": "string", "description": "类型名", "example": "科幻" },
+          "avgRating": { "type": "number", "description": "该组合下的平均评分", "example": 8.3 },
+          "count": { "type": "integer", "format": "int64", "description": "该组合下的电影数量", "example": 42 }
+        }
+      },
+      "SeasonAnalysisDTO": {
+        "type": "object",
+        "description": "档期-类型分析",
+        "properties": {
+          "seasonTag": { "type": "string", "description": "档期标签", "example": "春节档" },
+          "genre": { "type": "string", "description": "类型名", "example": "喜剧" },
+          "avgBoxOffice": { "type": "number", "description": "该组合平均票房（万元）", "example": 9800.00 },
+          "avgRating": { "type": "number", "description": "该组合平均评分", "example": 7.4 },
+          "count": { "type": "integer", "format": "int64", "description": "电影数量", "example": 18 }
+        }
+      },
+      "DirectorTopDTO": {
+        "type": "object",
+        "description": "导演统计",
+        "properties": {
+          "director": { "type": "string", "description": "导演姓名", "example": "克里斯托弗·诺兰" },
+          "count": { "type": "integer", "format": "int64", "description": "电影数量", "example": 10 },
+          "avgRating": { "type": "number", "description": "平均评分", "example": 8.9 }
+        }
+      },
+      "FilterOptionsDTO": {
+        "type": "object",
+        "description": "筛选器可选项",
+        "properties": {
+          "years": { "type": "array", "items": { "type": "integer" }, "description": "可选年份（升序）" },
+          "countries": { "type": "array", "items": { "type": "string" }, "description": "可选国家/地区" },
+          "genres": { "type": "array", "items": { "type": "string" }, "description": "可选类型" }
+        }
+      },
+      "PageMovieDTO": {
+        "type": "object",
+        "description": "Spring Data 分页结构",
+        "properties": {
+          "content": { "type": "array", "items": { "$ref": "#/components/schemas/MovieDTO" } },
+          "pageable": {
+            "type": "object",
+            "properties": {
+              "pageNumber": { "type": "integer" },
+              "pageSize": { "type": "integer" }
+            }
+          },
+          "totalElements": { "type": "integer", "format": "int64" },
+          "totalPages": { "type": "integer" },
+          "size": { "type": "integer" },
+          "number": { "type": "integer" },
+          "empty": { "type": "boolean" }
+        }
+      },
+      "ResultPageMovieDTO": {
+        "type": "object",
+        "description": "统一返回：Result<Page<MovieDTO>>",
+        "properties": {
+          "code": { "type": "integer", "description": "业务码：0-成功，非 0 表示失败", "example": 0 },
+          "message": { "type": "string", "description": "提示信息", "example": "ok" },
+          "data": { "$ref": "#/components/schemas/PageMovieDTO" }
+        }
+      },
+      "ResultMovieDetailDTO": {
+        "type": "object",
+        "description": "统一返回：Result<MovieDetailDTO>",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "$ref": "#/components/schemas/MovieDetailDTO" }
+        }
+      },
+      "ResultFilterOptionsDTO": {
+        "type": "object",
+        "description": "统一返回：Result<FilterOptionsDTO>",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "$ref": "#/components/schemas/FilterOptionsDTO" }
+        }
+      },
+      "ResultListYearTrendDTO": {
+        "type": "object",
+        "description": "统一返回：Result<List<YearTrendDTO>>",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/YearTrendDTO" } }
+        }
+      },
+      "ResultListGenreCompareDTO": {
+        "type": "object",
+        "description": "统一返回：Result<List<GenreCompareDTO>>",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/GenreCompareDTO" } }
+        }
+      },
+      "ResultListScatterPointDTO": {
+        "type": "object",
+        "description": "统一返回：Result<List<ScatterPointDTO>>",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/ScatterPointDTO" } }
+        }
+      },
+      "ResultListHeatmapDTO": {
+        "type": "object",
+        "description": "统一返回：Result<List<HeatmapDTO>>",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/HeatmapDTO" } }
+        }
+      },
+      "ResultListSeasonAnalysisDTO": {
+        "type": "object",
+        "description": "统一返回：Result<List<SeasonAnalysisDTO>>",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/SeasonAnalysisDTO" } }
+        }
+      },
+      "ResultListDirectorTopDTO": {
+        "type": "object",
+        "description": "统一返回：Result<List<DirectorTopDTO>>",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/DirectorTopDTO" } }
+        }
+      }
+    }
+  }
+}
