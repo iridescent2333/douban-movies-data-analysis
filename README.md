@@ -94,32 +94,37 @@ movie-dashboard/
 │           ├── application-local.yml.example       # 本地配置模板 → 复制为 application-local.yml
 │           ├── schema.sql                          # 建表 DDL（4 张表）
 │           └── data/movies.csv                     # 850 条初始数据（启动时加载）
-├── frontend/dist/                     # 【前端】Nginx 部署根目录
-│   ├── index.html                     # 单页应用入口
-│   ├── css/style.css                  # 明暗主题 + CSS Grid 布局
-│   └── js/
-│       ├── config.js                  # 全局配置（API_BASE 为空串，走 Nginx 同源代理）
-│       ├── main.js                    # 入口：初始化、事件绑定、数据转换层、图表调度
-│       ├── utils/                     # api.js(fetch封装+缓存) / debounce.js / ui.js
-│       └── charts/                    # 8 个 ECharts 图表模块
-├── frontend/nginx.conf                # 实际使用的 Nginx 配置（含本机路径，不入库）
-├── scripts/                           # 数据脚本（Python）
-│   ├── generate_data.py               # 数据生成器（种子 42，可复现）
-│   ├── convert_to_normalized.py       # CSV → 规范化 SQL
-│   ├── requirements.txt               # Python 依赖清单
-│   └── movies.csv                     # 生成的数据副本
-└── docs/                              # 文档
-    ├── apifox-import.json             # ApiFox 导入文件（OpenAPI 3.0，9 个接口）
-    ├── mysql-init.sql                 # MySQL 建库脚本
-    ├── nginx.conf.example             # Nginx 配置模板（路径占位符，组员复制后改 root）
-    ├── 代码说明.md                     # 模块职责 / 核心流程 / 数据模型 / 扩展指引
-    ├── UPGRADE.md                     # H2→MySQL 迁移与部署 FAQ
-    ├── 数据库与API契约.md               # 表结构 + 接口契约 + JSON 示例
-    ├── 答辩预案.md                     # 开场白 + 演示流程 + 高频问答
-    ├── 组员任务清单.md                  # 三人分工明细
-    ├── 项目逻辑流程.md                  # 开发路线图 + 时序图
-    ├── 数据说明.md                     # 数据分布与生成规则
-    └── AI使用记录表.md                 # AI 辅助占比如实记录（课程要求）
+├── frontend/
+│   ├── dist/                     # 【前端】Nginx 部署根目录
+│   │   ├── index.html             # 单页应用入口
+│   │   ├── css/style.css          # 明暗主题 + CSS Grid 布局
+│   │   └── js/                    # 13 个 JS 文件：config + main + utils(3) + charts(8)
+│   │       ├── config.js          # 全局配置（API_BASE 为空串，走 Nginx 同源代理）
+│   │       ├── main.js            # 入口：初始化、事件绑定、数据转换层、图表调度
+│   │       ├── utils/             # api.js(fetch封装+缓存) / debounce.js / ui.js
+│   │       └── charts/            # 8 个 ECharts 图表模块（挂 window.Charts）
+│   └── nginx-1.26.2/              # 组长本机的 Nginx（二进制，.gitignore 排除；组员需自行下载）
+├── scripts/                       # 数据脚本（Python）
+│   ├── generate_data.py           # 数据生成器（种子 42，可复现）
+│   ├── convert_to_normalized.py   # CSV → 规范化 SQL（H2 时代产物，保留备查）
+│   ├── init_h2_sql.py             # 同上（H2 时代遗留，待清理）
+│   ├── requirements.txt           # Python 依赖清单
+│   └── movies.csv                 # 生成的数据副本（与后端 classpath 内 CSV 同源）
+├── CONTRIBUTING.md                # 贡献指南入口（PR/Issue 时 GitHub 自动提示）
+└── docs/                          # 文档（入口：docs/README.md 索引）
+    ├── README.md                  # 文档地图 + 三条阅读路线
+    ├── 团队协作指南.md             # GitHub 协作全流程：分支保护 / PR / Issue / 规范
+    ├── 快速上手.md                 # 从零到跑起来（环境/配置/启动/FAQ/版本演进）
+    ├── 代码说明.md                 # 模块职责 / 核心流程 / 数据模型 / 扩展指引
+    ├── 数据库与API契约.md          # 表结构 + 接口契约 + JSON 示例
+    ├── 项目逻辑流程.md             # 开发路线图 + 时序图 + 扩展点
+    ├── 组员任务清单.md             # 三人分工明细与进度
+    ├── 答辩预案.md                 # 开场白 + 演示流程 + 高频问答
+    ├── 数据说明.md                 # 数据分布与生成规则
+    ├── AI使用记录表.md             # AI 辅助占比如实记录（课程要求）
+    ├── apifox-import.json         # ApiFox 导入文件（OpenAPI 3.0，9 个接口）
+    ├── mysql-init.sql             # MySQL 建库脚本
+    └── nginx.conf.example         # Nginx 配置模板（路径占位符，组员复制后改 root）
 ```
 
 ---
@@ -131,7 +136,7 @@ movie-dashboard/
 | JDK | 17 及以上 | 后端编译运行 | 编译产物为 Java 17 字节码 |
 | MySQL Server | 8.0.x | 数据存储 | 需记住自己设置的账号密码 |
 | MySQL Workbench | 8.0.x | 数据库 GUI 管理 | 选装，用于验证数据 |
-| Nginx | 1.24+（Windows 解压版） | 前端托管 + API 代理 | 项目自带 `frontend/nginx-1.26.2/` |
+| Nginx | 1.24+（Windows 解压版） | 前端托管 + API 代理 | ⚠️ 二进制不入库，组员 clone 后需自行下载（见 `docs/快速上手.md`） |
 | IntelliJ IDEA | 2023+ | 后端开发调试 | 选装，也可命令行 Maven |
 | ApiFox | 最新版 | 接口调试 | 选装 |
 | Python | 3.8+ | 数据脚本（可选） | 仅需重新生成数据时使用 |
@@ -195,13 +200,11 @@ Started MovieDashboardApplication in x seconds
 
 ### Step 3 · 配置并启动 Nginx
 
-```nginx
-# frontend/nginx-1.26.2/conf/nginx.conf 关键两处：
-root D:/your/path/movie-dashboard/frontend/dist;   # 改成你本机 dist 绝对路径（正斜杠）
+> ⚠️ `frontend/nginx-1.26.2/` 被 .gitignore 排除（二进制不入库），**clone 仓库的同学需自行到 nginx.org 下载**，解压到无中文/无空格路径。
 
-location ^~ /api/ {
-    proxy_pass http://127.0.0.1:8081/api/;         # 端口与后端 server.port 一致
-}
+```bash
+# 用仓库模板生成配置：复制 docs/nginx.conf.example 覆盖 <你的nginx>/conf/nginx.conf
+# 把 root 一行的 __YOUR_FRONTEND_DIST_PATH__ 改成本项目 frontend/dist 的绝对路径（正斜杠）
 ```
 
 ```powershell
@@ -235,7 +238,7 @@ ApiFox → 新建项目 → 导入 → OpenAPI/Swagger → 选 `docs/apifox-impo
 | 6 | GET | `/api/stats/scatter-cost-box` | 成本-票房散点（含评分/片名） | 支持全部筛选参数 |
 | 7 | GET | `/api/stats/heatmap` | 国家 × 类型评分热力矩阵 | 支持全部筛选参数 |
 | 8 | GET | `/api/stats/season-analysis` | 档期 × 类型交叉分析 | 支持全部筛选参数 |
-| 9 | GET | `/api/stats/top-directors` | 导演作品 TOP N | `n`（默认 20） |
+| 9 | GET | `/api/stats/top-directors` | 导演作品 TOP N | `n`（后端默认 10，前端传 20；当前不随其他筛选联动） |
 
 响应示例：
 
@@ -276,7 +279,7 @@ ApiFox → 新建项目 → 导入 → OpenAPI/Swagger → 选 `docs/apifox-impo
 | 年份跨度 | 1995 – 2025（31 年） |
 | 类型数 | **14** 种（剧情/喜剧/爱情/动画/科幻/悬疑/恐怖/动作/战争/文艺/主旋律/纪录片/短片/Cult） |
 | 国家/地区 | **10** 个（中国大陆、中国香港、中国台湾、美国、日本、韩国、印度、英国、法国、德国） |
-| 财务数据 | 850 条（预算、票房、上映日期、档期标签） |
+| 财务数据 | 850 条财务记录（每部电影一条），其中 **418 条**含预算+票房数值 |
 | 评分分布 | 正态 N(7.0, 1.2)，截断至 2.0–9.8 |
 
 ### 数据模型（4 张表，满足第三范式）
@@ -287,7 +290,7 @@ genres ──< movie_genres >── movies ──1:1── movie_financials
 
 | 表名 | 职责 | 关键字段 |
 |------|------|---------|
-| `movies` | 电影主表 | id, title, director, lead_actor, country, release_year, rating, vote_count, intro, poster_url |
+| `movies` | 电影主表 | id, title, director, lead_actor, country, release_year, duration, rating, vote_count, intro, poster_url |
 | `genres` | 类型字典表 | id, name（唯一） |
 | `movie_genres` | 电影-类型多对多关联 | movie_id, genre_id（联合主键） |
 | `movie_financials` | 财务信息（稀疏字段独立成表） | movie_id（主键）, budget_wan, box_office_wan, release_date, season_tag |
@@ -310,6 +313,18 @@ genres ──< movie_genres >── movies ──1:1── movie_financials
 
 ---
 
+## 🤝 团队协作
+
+仓库：<https://github.com/iridescent2333/douban-movies-data-analysis>
+
+- **分支模型**：`main` 受保护，只接受 PR；每人从最新 main 切 `feature/*` 分支开发
+- **合并要求**：至少 1 人 review 通过 + PR 检查单全过 + 意见全部解决
+- **Commit 规范**：Conventional Commits（`feat:` / `fix:` / `docs:` / `refactor:` / `chore:`）
+- **任务分派**：GitHub Issues + Projects 看板，做完 PR 描述写 `Closes #编号`
+- **完整流程**（邀请成员、分支保护配置、审查清单、协作节奏）：见 [`docs/团队协作指南.md`](docs/团队协作指南.md)
+
+---
+
 ## ❓ 常见问题（FAQ）
 
 | 现象 | 原因 | 解决办法 |
@@ -326,18 +341,22 @@ genres ──< movie_genres >── movies ──1:1── movie_financials
 | 筛选后数量没变化 | 前端 localStorage 缓存 5 分钟 | Ctrl+Shift+R 强刷或清缓存验证 |
 | ApiFox 导入失败 | JSON 格式问题 | `python -m json.tool docs/apifox-import.json` 校验 |
 | 组员 clone 后启动无数据 | 正常，首次启动会加载 CSV | 等控制台出现 `[DataInit] 加载完成！` |
+| 组员 clone 后没有 nginx 目录 | 正常，二进制被 .gitignore 排除 | 自行下载 Nginx，按 `docs/快速上手.md` Step 3 配置 |
 
-更多排查细节见 [`docs/UPGRADE.md`](docs/UPGRADE.md)。
+更多排查细节见 [`docs/快速上手.md`](docs/快速上手.md)。
 
 ---
 
-## 📚 相关文档
+## 📚 文档导航
+
+完整文档地图与阅读路线见 [`docs/README.md`](docs/README.md)。常用入口：
 
 | 文档 | 用途 |
 |------|------|
+| [`docs/团队协作指南.md`](docs/团队协作指南.md) | **三人协作必读**：分支模型、PR 流程、Commit 规范、审查清单 |
+| [`docs/快速上手.md`](docs/快速上手.md) | 新组员/换电脑：从零安装到看板跑起来 + FAQ |
 | [`docs/代码说明.md`](docs/代码说明.md) | 模块职责、核心流程、数据模型、二次开发与扩展指引 |
-| [`docs/UPGRADE.md`](docs/UPGRADE.md) | H2→MySQL 迁移说明与部署运维 FAQ |
-| [`docs/数据库与API契约.md`](docs/数据库与API契约.md) | 表结构、接口参数与响应 JSON 示例 |
+| [`docs/数据库与API契约.md`](docs/数据库与API契约.md) | 表结构、接口参数与响应 JSON 示例（改接口前必读） |
 | [`docs/apifox-import.json`](docs/apifox-import.json) | ApiFox 直接导入 |
 | [`docs/nginx.conf.example`](docs/nginx.conf.example) | Nginx 配置模板 |
 | [`docs/答辩预案.md`](docs/答辩预案.md) | 演示流程与老师高频问答 |
