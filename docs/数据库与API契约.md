@@ -15,8 +15,8 @@
 │ name    (UK)  │   │   │ genre_id  (PK,FK)│──┐    │ title              │
 └───────────────┘   │   └──────────────────┘  │    │ director          │
                     │                           │    │ lead_actor        │
-                    └───────────────────────────┘    │ country           │
-                                                     │ year              │
+                    └───────────────────────────┘                                                         │ country           │
+                                                     │ release_year      │ ← 库表列名；JSON 字段名为 year
                                                      │ duration          │
                                                      │ rating            │
                                                      │ vote_count        │
@@ -38,7 +38,7 @@
 
 关系：
   movies ──M:N── genres     （通过 movie_genres 中间表）
-  movies ──1:0..1── movie_financials   （约 50% 的 movie 有财务记录）
+  movies ──1:1── movie_financials   （当前 850 部电影全部有财务行，其中 418 条含预算+票房数值）
 ```
 
 ---
@@ -63,7 +63,7 @@
 | director    | VARCHAR(100)   | ——         | 导演（多导演用 `; ` 分隔）        |
 | lead_actor  | VARCHAR(300)   | ——         | 主演（多个用 `; ` 分隔）          |
 | country     | VARCHAR(50)    | ——         | 制片国家/地区（如 "美国"）        |
-| year        | INT            | ——         | 上映年份                          |
+| release_year | INT           | ——         | 上映年份（数据库列名；JSON 字段名为 `year`） |
 | duration    | INT            | ——         | 片长（分钟）                      |
 | rating      | DECIMAL(3,1)  | ——         | 豆瓣评分（2.0 – 9.8，一位小数）   |
 | vote_count  | INT            | ——         | 评价人数                          |
@@ -88,6 +88,9 @@
 | box_office_wan | DECIMAL(12,2)| ——           | 票房（万元）                      |
 | release_date   | DATE          | ——           | 上映日期（yyyy-MM-dd）            |
 | season_tag     | VARCHAR(30)   | ——           | 档期标签（如 "暑期档"）           |
+
+> **行数口径（2026-10 数据）**：本表共 **850 行**——每部电影一条，只要 `budget_wan` / `box_office_wan` / `release_date` 任一非空即由 `DataInitializer` 建行；
+> 其中 **418 条**同时含预算+票房数值，散点图 / 档期图 / 成本效益图实际使用的是这 418 条。
 
 ---
 
@@ -127,7 +130,7 @@ GET /api/movies?yearStart=2010&yearEnd=2020&country=美国&ratingMin=8.0&ratingM
 |------------|-----------|------|-----------------------------------|
 | yearStart  | Integer   | ❌   | 起始年份（含）                    |
 | yearEnd    | Integer   | ❌   | 结束年份（含）                    |
-| genres     | List<String> (重复) | ❌ | 类型名，`?genres=科幻&genres=动作` 表示同时包含 |
+| genres     | List<String> | ❌   | 类型名，多个表示**同时包含（AND）**。前端传**逗号分隔**：`genres=科幻,动作`；重复参数 `?genres=科幻&genres=动作` 亦可 |
 | country    | String    | ❌   | 精确匹配国家/地区                 |
 | ratingMin  | BigDecimal| ❌   | 最低评分（含）                    |
 | ratingMax  | BigDecimal| ❌   | 最高评分（含）                    |
@@ -296,7 +299,7 @@ GET /api/stats/scatter-cost-box
 }
 ```
 
-> 只有约 50% 有财务数据的电影会返回在这里。
+> 仅返回含预算+票房数值的电影（当前 418 条）；只有上映日期、无数值的电影不出现在散点中。
 
 ---
 
@@ -353,6 +356,12 @@ GET /api/stats/season-analysis
 GET /api/stats/top-directors?n=10
 ```
 
+**Query 参数**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| n | Integer | ❌ | 返回前 N 位导演，**默认 10**；前端看板实际传 `n=20` |
+
 **响应**
 
 ```json
@@ -401,7 +410,7 @@ document.getElementById('nextPage').disabled = (currentPage >= totalPages);
 
 | 问题                                  | 决策                                                  | 理由                                         |
 |---------------------------------------|-------------------------------------------------------|----------------------------------------------|
-| 为什么 movies 和 movie_financials 分开？ | 财务数据只存在于 50% 的电影上，拆表比在 movies 里放大量 null 更好 | 数据库范式 + 查询效率（统计票房时只查 418 条） |
+| 为什么 movies 和 movie_financials 分开？ | 财务字段稀疏（仅约半数电影有预算+票房数值），拆表比在 movies 里放大量 null 更好 | 数据库范式 + 查询效率（统计票房时只查有数值的 418 条） |
 | 为什么 genres 独立成表？                | 多对多关系需要中间表 + 类型是字典数据                    | 统计时 GROUP BY genre 很方便                |
 | 为什么不用 `@OneToMany` 而是 `@ManyToMany`？ | 类型是真正的多对多（一部电影多个类型，一个类型多部电影） | JPA 的 `@JoinTable` 自动生成中间表           |
 | 为什么 budget 单位是"万"而不是"原始美元"？  | 统一成人民币万元，前后端一致显示，不做货币换算           | 课程作业不需要精确汇率，单位统一即可         |
