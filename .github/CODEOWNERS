@@ -1,0 +1,20 @@
+# CODEOWNERS —— 按目录自动指派 review 人
+#
+# ⚠️ 使用前必改：把下面的 @占位用户名 换成三位组员真实的 GitHub 用户名
+#    （GitHub 网页右上角头像 → Settings → Account 可见 username，不是真名）
+#    改完后提交推送到 main，之后每个 PR 会自动通知对应负责人 review。
+
+# 后端（Spring Boot / MySQL）
+/backend/                      @zhang-github-username
+
+# 前端（原生 HTML/CSS/JS + ECharts）
+/frontend/                     @zhong-github-username
+
+# 数据脚本与文档
+/scripts/                      @cao-github-username
+/docs/                         @cao-github-username
+
+# 工程配置（队长把关）
+/.github/                      @zhang-github-username
+/README.md                     @zhang-github-username
+/CONTRIBUTING.md               @zhang-github-username
