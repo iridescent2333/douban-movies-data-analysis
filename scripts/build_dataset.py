@@ -17,7 +17,7 @@ build_dataset.py —— 把 Kaggle「Douban Movies Dataset」真实豆瓣数据
   title         片名
   director      导演（数据源仅保留第一位）
   lead_actor    主演（最多 5 位，"; " 分隔）
-  country       制片国家/地区（多合拍片取第一个）
+  country       制片国家/地区（合拍片保留全部，" / " 分隔，如 "中国大陆 / 中国香港"）
   year          上映年份（release_date 前 4 位）
   duration      片长（分钟，从 "117分钟" 提取数字）
   rating        豆瓣评分
@@ -125,7 +125,9 @@ def main() -> int:
         subject_id = m.group(1)
 
         actors = [a.strip() for a in (r.get('actors') or '').split(',') if a.strip()]
-        # 国家/地区在数据源里是 " / " 分隔（如 "中国大陆 / 中国香港"），取第一个作为主地区
+        # 国家/地区在数据源里是 " / " 分隔（如 "中国大陆 / 中国香港"）。
+        # 保留完整串：分地区热榜按"包含"匹配，合拍片同时计入每个地区的热门榜，
+        # 这样德国/意大利/西班牙等传统电影强国也能凑够 ≥20 部组成完整榜单
         countries = [c.strip() for c in re.split(r'[/,]', (r.get('countries') or '')) if c.strip()]
         duration = parse_runtime(r.get('runtime'))
         summary = clean_text(r.get('summary'))
@@ -138,7 +140,7 @@ def main() -> int:
             ('title', title),
             ('director', clean_text(r.get('directors')) or '未知'),
             ('lead_actor', ' ; '.join(actors)),
-            ('country', countries[0] if countries else '其他'),
+            ('country', ' / '.join(countries) if countries else '其他'),
             ('year', year),
             ('duration', duration if duration is not None else ''),
             ('rating', rating),

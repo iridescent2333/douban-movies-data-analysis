@@ -34,7 +34,7 @@ CREATE TABLE movies (
     title        VARCHAR(200) NOT NULL,
     director     VARCHAR(100),
     lead_actor   VARCHAR(500),                          -- 主演最多 5 位，"; " 分隔
-    country      VARCHAR(100),                          -- 制片国家/地区（取第一个）
+    country      VARCHAR(120),                          -- 制片国家/地区（合拍片保留完整串，" / " 分隔）
     release_year INT,                                   -- 上映年份（year 是保留字，避免使用）
     release_date DATE,                                  -- 上映日期（可精确到日，用于档期统计）
     season_tag   VARCHAR(20),                           -- 档期：春季档/暑期档/秋季档/贺岁档

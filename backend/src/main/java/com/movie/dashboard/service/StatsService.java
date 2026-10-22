@@ -72,14 +72,18 @@ public class StatsService {
         return all.stream()
                 .filter(m -> q.getYearStart() == null || m.getYear() != null && m.getYear() >= q.getYearStart())
                 .filter(m -> q.getYearEnd() == null || m.getYear() != null && m.getYear() <= q.getYearEnd())
-                .filter(m -> q.getCountry() == null || q.getCountry().isBlank() || q.getCountry().equals(m.getCountry()))
+                .filter(m -> q.getCountry() == null || q.getCountry().isBlank() || countryContains(m.getCountry(), q.getCountry()))
                 .filter(m -> q.getRatingMin() == null || m.getRating() != null && m.getRating().compareTo(q.getRatingMin()) >= 0)
                 .filter(m -> q.getRatingMax() == null || m.getRating() != null && m.getRating().compareTo(q.getRatingMax()) <= 0)
                 .filter(m -> {
                     if (q.getGenres() == null || q.getGenres().isEmpty()) return true;
                     if (m.getGenres() == null || m.getGenres().isEmpty()) return false;
-                    Set<String> want = new HashSet<>(q.getGenres());
-                    return m.getGenres().stream().map(Genre::getName).allMatch(want::contains);
+                    // AND 语义：影片须同时包含所有选中类型（影片的类型集 ⊇ 选中集）。
+                    // 注意方向不能写反：若写成"影片的每个类型都在选中集里"，
+                    // 单选"科幻"时只有"纯科幻"影片命中，科幻+动作的合拍类型全部被误杀
+                    Set<String> movieGenres = m.getGenres().stream()
+                            .map(Genre::getName).collect(Collectors.toSet());
+                    return movieGenres.containsAll(q.getGenres());
                 })
                 .collect(Collectors.toList());
     }
@@ -158,7 +162,7 @@ public class StatsService {
                         m.getTitle(),
                         m.getRating(),
                         m.getVoteCount(),
-                        m.getCountry(),
+                        primaryCountry(m.getCountry()),
                         firstGenre(m)))
                 .collect(Collectors.toList());
     }
@@ -183,9 +187,14 @@ public class StatsService {
         for (Movie m : ctx.movies) {
             if (m.getCountry() == null || m.getCountry().isBlank()) continue;
             if (m.getGenres() == null) continue;
-            for (Genre g : m.getGenres()) {
-                String key = m.getCountry() + "||" + g.getName();
-                bucket.computeIfAbsent(key, k -> new ArrayList<>()).add(m);
+            // 合拍片拆分到每个地区分别计数（与分地区热榜的"包含"口径一致）
+            for (String country : m.getCountry().split("/")) {
+                String c = country.trim();
+                if (c.isEmpty()) continue;
+                for (Genre g : m.getGenres()) {
+                    String key = c + "||" + g.getName();
+                    bucket.computeIfAbsent(key, k -> new ArrayList<>()).add(m);
+                }
             }
         }
         return bucket.entrySet().stream().map(e -> {
@@ -370,13 +379,37 @@ public class StatsService {
                 if (yearMin == null || m.getYear() < yearMin) yearMin = m.getYear();
                 if (yearMax == null || m.getYear() > yearMax) yearMax = m.getYear();
             }
-            if (m.getCountry() != null && !m.getCountry().isBlank()) countries.add(m.getCountry());
+            if (m.getCountry() != null && !m.getCountry().isBlank()) {
+                // 合拍片按地区拆分计数，KPI 的"覆盖地区数"才是真实地区数
+                for (String c : m.getCountry().split("/")) {
+                    if (!c.isBlank()) countries.add(c.trim());
+                }
+            }
         }
 
         return new StatsOverviewDTO.KpiDTO(total, avgRating, yearMin, yearMax, countries.size());
     }
 
     // ---------- 辅助 ----------
+
+    /**
+     * 地区"包含"匹配：合拍片的 country 字段是完整串（" / " 分隔，
+     * 如 "中国大陆 / 中国香港"），任一地区命中即算该地区作品。
+     * 这样德国、意大利等传统电影强国合拍片也能计入，凑够 ≥20 部组成完整榜单。
+     */
+    static boolean countryContains(String movieCountry, String want) {
+        if (movieCountry == null || want == null) return false;
+        for (String part : movieCountry.split("/")) {
+            if (part.trim().equals(want.trim())) return true;
+        }
+        return false;
+    }
+
+    /** 合拍片取第一个地区作为主地区（散点图着色等单值场景用） */
+    static String primaryCountry(String movieCountry) {
+        if (movieCountry == null || movieCountry.isBlank()) return movieCountry;
+        return movieCountry.split("/")[0].trim();
+    }
 
     /**
      * 计算列表平均值，跳过 null，空列表返回 0。

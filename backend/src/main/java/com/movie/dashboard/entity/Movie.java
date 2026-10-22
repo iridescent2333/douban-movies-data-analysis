@@ -35,7 +35,8 @@ public class Movie {
     private String leadActor;
 
     /** 制片国家/地区 */
-    @Column(name = "country", length = 50)
+    /** 制片国家/地区：合拍片保留完整串，" / " 分隔（如 "中国大陆 / 中国香港"），查询按"包含"匹配 */
+    @Column(name = "country", length = 120)
     private String country;
 
     /** 上映年份 —— 列名不用 year（H2/SQL 保留字），改用 release_year */

@@ -81,6 +81,7 @@
     bindRankToggles();
     bindWorksListEvents();
     bindGlobalSearch();
+    bindChartClickFilters();
 
     if (global.UI_THEME) global.UI_THEME.registerEChartsThemes();
 
@@ -307,16 +308,16 @@
     }).catch(onLoadError);
   }
 
-  /** 分年代页：年代 chips（5 年一档，数据跨度 1995-2025） */
+  /** 分年代页：年代 chips（数据真实跨度 1931-2026，按十年一档） */
   function initEraPage() {
     var eras = [
       { label: '全部年代', start: null, end: null },
-      { label: '1995-1999', start: 1995, end: 1999 },
-      { label: '2000-2004', start: 2000, end: 2004 },
-      { label: '2005-2009', start: 2005, end: 2009 },
-      { label: '2010-2014', start: 2010, end: 2014 },
-      { label: '2015-2019', start: 2015, end: 2019 },
-      { label: '2020-2025', start: 2020, end: 2025 },
+      { label: '1980 以前', start: null, end: 1979 },
+      { label: '1980-1989', start: 1980, end: 1989 },
+      { label: '1990-1999', start: 1990, end: 1999 },
+      { label: '2000-2009', start: 2000, end: 2009 },
+      { label: '2010-2019', start: 2010, end: 2019 },
+      { label: '2020 至今', start: 2020, end: null },
     ];
     var bar = document.getElementById('eraChips');
     bar.innerHTML = '';
@@ -416,7 +417,9 @@
     if (typeSel) typeSel.addEventListener('change', trigger);
 
     // ---- F1 首页左侧筛选面板（与影片库共用 filterState，双向同步） ----
-    ['homeYearStart', 'homeYearEnd', 'ratingMin', 'ratingMax'].forEach(function (id) {
+    // 注意：首页评分输入框的 id 是 homeRatingMin/homeRatingMax（与影片库的 ratingMin/ratingMax 区分，
+    // 重复 id 会让 getElementById 永远只命中第一个，导致影片库评分筛选"无效"）
+    ['homeYearStart', 'homeYearEnd', 'homeRatingMin', 'homeRatingMax'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('input', trigger);
     });
@@ -428,13 +431,15 @@
     if (preset) {
       preset.addEventListener('change', function () {
         var v = preset.value;
+        var lo = document.getElementById('homeRatingMin');
+        var hi = document.getElementById('homeRatingMax');
         if (v) {
           var parts = v.split('-');
-          document.getElementById('ratingMin').value = parts[0] === '0' ? '' : parts[0];
-          document.getElementById('ratingMax').value = parts[1] === '10' ? '' : parts[1];
+          if (lo) lo.value = parts[0] === '0' ? '' : parts[0];
+          if (hi) hi.value = parts[1] === '10' ? '' : parts[1];
         } else {
-          document.getElementById('ratingMin').value = '';
-          document.getElementById('ratingMax').value = '';
+          if (lo) lo.value = '';
+          if (hi) hi.value = '';
         }
         trigger();
       });
@@ -482,8 +487,8 @@
       type: pickValue('typeSelect', 'homeTypeSelect'),
       yearStart: pickNumber('yearStart', 'homeYearStart'),
       yearEnd: pickNumber('yearEnd', 'homeYearEnd'),
-      ratingMin: pickNumber('ratingMin', null),
-      ratingMax: pickNumber('ratingMax', null),
+      ratingMin: pickNumber('ratingMin', 'homeRatingMin'),
+      ratingMax: pickNumber('ratingMax', 'homeRatingMax'),
       title: pickValue('titleSearch', null),
     };
     // 把状态同步回另一处的控件，避免两面板显示不一致
@@ -515,6 +520,8 @@
     var mapping = {
       yearStart: filterState.yearStart, yearEnd: filterState.yearEnd,
       ratingMin: filterState.ratingMin, ratingMax: filterState.ratingMax,
+      homeYearStart: filterState.yearStart, homeYearEnd: filterState.yearEnd,
+      homeRatingMin: filterState.ratingMin, homeRatingMax: filterState.ratingMax,
     };
     Object.keys(mapping).forEach(function (id) {
       var el = document.getElementById(id);
@@ -536,7 +543,8 @@
 
   /** 清空两处筛选控件 */
   function resetFilterInputs() {
-    ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax', 'homeYearStart', 'homeYearEnd', 'titleSearch']
+    ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax',
+     'homeYearStart', 'homeYearEnd', 'homeRatingMin', 'homeRatingMax', 'titleSearch']
       .forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.value = '';
@@ -629,7 +637,34 @@
   }
 
   /* ============================================================
-   * 6. 顶栏搜索 → 跳转影片库并按标题筛选
+   * 6.1 图表点击联动筛选（F5 直方图点柱 / F8 类型对比点柱）
+   * ============================================================ */
+  function bindChartClickFilters() {
+    // F5：点击评分段柱体 → 写入评分区间筛选（"9.5+" 段的 max 为空，按 10 处理）
+    global.addEventListener('filter:ratingClick', function (e) {
+      var d = (e && e.detail) || {};
+      if (d.min == null) return;
+      filterState.ratingMin = d.min;
+      filterState.ratingMax = (d.max != null && d.max <= 10) ? d.max : 10;
+      syncFilterInputs();
+      pageState.page = 1;
+      refreshAll();
+      UI.showToast('已按评分段 ' + (d.range || (d.min + '-' + d.max)) + ' 筛选', 'success');
+    });
+    // F8：点击类型柱/雷达 → 写入类型筛选
+    global.addEventListener('filter:genreClick', function (e) {
+      var d = (e && e.detail) || {};
+      if (!d.genre) return;
+      filterState.type = d.genre;
+      syncFilterInputs();
+      pageState.page = 1;
+      refreshAll();
+      UI.showToast('已按类型「' + d.genre + '」筛选', 'success');
+    });
+  }
+
+  /* ============================================================
+   * 6.2 顶栏搜索 → 跳转影片库并按标题筛选
    * ============================================================ */
   function bindGlobalSearch() {
     var input = document.getElementById('globalSearch');
@@ -749,13 +784,25 @@
 
   function transformHeatmap(list) {
     if (!list || !list.length) return { countries: [], genres: [], data: [] };
-    var countrySet = [], genreSet = [];
+    // 后端返回全部地区 × 类型（含合拍片拆分），轴太多会挤成一团：
+    // 只保留影片数最多的 12 个热门地区 × 10 个热门类型，矩阵清晰易读
+    var MAX_COUNTRIES = 12, MAX_GENRES = 10;
+    var countryTotal = {}, genreTotal = {};
     list.forEach(function (d) {
-      if (countrySet.indexOf(d.country) === -1) countrySet.push(d.country);
-      if (genreSet.indexOf(d.genre) === -1) genreSet.push(d.genre);
+      countryTotal[d.country] = (countryTotal[d.country] || 0) + (d.count || 0);
+      genreTotal[d.genre] = (genreTotal[d.genre] || 0) + (d.count || 0);
     });
-    var data = list.map(function (d) {
-      return [countrySet.indexOf(d.country), genreSet.indexOf(d.genre), d.avgRating != null ? +d.avgRating : 0];
+    var topKeys = function (totals, max) {
+      return Object.keys(totals).sort(function (a, b) { return totals[b] - totals[a]; }).slice(0, max);
+    };
+    var countrySet = topKeys(countryTotal, MAX_COUNTRIES);
+    var genreSet = topKeys(genreTotal, MAX_GENRES);
+    var data = [];
+    list.forEach(function (d) {
+      var ci = countrySet.indexOf(d.country);
+      var gi = genreSet.indexOf(d.genre);
+      if (ci === -1 || gi === -1) return;
+      data.push([ci, gi, d.avgRating != null ? +d.avgRating : 0, d.count || 0]);
     });
     return { countries: countrySet, genres: genreSet, data: data };
   }

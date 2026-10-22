@@ -55,22 +55,25 @@
 
     var option;
     if (mode === 'radar') {
-      // ---- 雷达图：取数量 TOP 8 的类型，避免雷达图过密 ----
-      var top = sorted.slice(0, 8);
+      // ---- 雷达图：取数量 TOP 6 的类型，避免雷达图过密拥挤 ----
+      var top = sorted.slice(0, 6);
       var maxCount = Math.max.apply(null, top.map(function (d) { return d.count || 0; }).concat([1]));
       var maxBox = Math.max.apply(null, top.map(function (d) { return d.avgVotes || 0; }).concat([1])) / 10000;
 
       option = {
         tooltip: { trigger: 'item' },
-        legend: { top: 4, data: top.map(function (d) { return d.genre; }) },
+        legend: { top: 6, itemGap: 24, textStyle: { fontSize: 13 }, data: top.map(function (d) { return d.genre; }) },
         radar: {
           indicator: [
             { name: '平均评分', max: 10 },
             { name: '电影数量', max: maxCount },
             { name: '平均热度(万人)', max: maxBox },
           ],
-          radius: '62%',
+          center: ['50%', '56%'],
+          radius: '72%',
+          axisName: { fontSize: 14, fontWeight: 600 },
           splitArea: { areaStyle: { opacity: 0.06 } },
+          splitLine: { lineStyle: { width: 1 } },
         },
         series: [{
           type: 'radar',
@@ -80,8 +83,9 @@
               value: [d.avgRating || 0, d.count || 0, d.avgVotes != null ? +(d.avgVotes/10000).toFixed(1) : 0],
             };
           }),
-          symbolSize: 3,
-          areaStyle: { opacity: 0.12 },
+          symbolSize: 5,
+          lineStyle: { width: 2 },
+          areaStyle: { opacity: 0.1 },
         }],
       };
     } else {

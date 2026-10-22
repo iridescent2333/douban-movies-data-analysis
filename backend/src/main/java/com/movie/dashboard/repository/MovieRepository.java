@@ -75,7 +75,7 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
             LEFT JOIN FETCH m.genres
             WHERE (:yearStart IS NULL OR m.year >= :yearStart)
               AND (:yearEnd   IS NULL OR m.year <= :yearEnd)
-              AND (:country   IS NULL OR m.country = :country)
+              AND (:country   IS NULL OR m.country LIKE CONCAT('%', :country, '%'))
               AND (:ratingMin IS NULL OR m.rating >= :ratingMin)
               AND (:ratingMax IS NULL OR m.rating <= :ratingMax)
               AND (:title     IS NULL OR m.title LIKE CONCAT('%', :title, '%'))
@@ -88,7 +88,7 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
             SELECT COUNT(DISTINCT m) FROM Movie m
             WHERE (:yearStart IS NULL OR m.year >= :yearStart)
               AND (:yearEnd   IS NULL OR m.year <= :yearEnd)
-              AND (:country   IS NULL OR m.country = :country)
+              AND (:country   IS NULL OR m.country LIKE CONCAT('%', :country, '%'))
               AND (:ratingMin IS NULL OR m.rating >= :ratingMin)
               AND (:ratingMax IS NULL OR m.rating <= :ratingMax)
               AND (:title     IS NULL OR m.title LIKE CONCAT('%', :title, '%'))

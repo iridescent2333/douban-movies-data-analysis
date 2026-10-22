@@ -6,11 +6,11 @@
   <title>豆瓣电影数据洞察看板</title>
 
   <!-- ECharts 本地化：vendor/echarts.min.js 随仓库分发，离线可用、不受 CDN 屏蔽影响 -->
-  <script src="vendor/echarts.min.js"></script>
+  <script src="vendor/echarts.min.js?v=20261023a"></script>
   <!-- 加载器：本地文件缺失时自动回退多个 CDN 镜像；全部失败会广播 echarts:error 给出明确提示 -->
-  <script src="js/echarts-loader.js"></script>
+  <script src="js/echarts-loader.js?v=20261023a"></script>
 
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=20261023a" />
 </head>
 <body>
 
@@ -110,9 +110,9 @@
                 <option value="0-6">6 分以下</option>
               </select>
               <div class="range-inputs">
-                <input type="number" id="ratingMin" min="0" max="10" step="0.1" placeholder="最低" />
+                <input type="number" id="homeRatingMin" min="0" max="10" step="0.1" placeholder="最低" />
                 <span>—</span>
-                <input type="number" id="ratingMax" min="0" max="10" step="0.1" placeholder="最高" />
+                <input type="number" id="homeRatingMax" min="0" max="10" step="0.1" placeholder="最高" />
               </div>
             </div>
 
@@ -237,7 +237,7 @@
         <div class="page-head">
           <div>
             <h2>F8 类型对比</h2>
-            <p class="page-desc">不同题材在影片数量、平均评分与平均票房上的差异</p>
+            <p class="page-desc">不同题材在影片数量、平均评分与平均热度（评价人数）上的差异</p>
           </div>
           <div class="chart-toggle" id="genreCompareToggle">
             <button class="toggle-btn active" data-mode="bar">柱状图</button>
@@ -257,19 +257,17 @@
             <p class="page-desc">投入产出、地域口碑、档期与导演视角的补充洞察</p>
           </div>
         </div>
-        <div class="panel-row panel-row-2">
-          <div class="panel">
-            <div class="panel-head"><h3>评分 × 热度散点</h3><span class="panel-sub">横轴=豆瓣评分 · 纵轴=评价人数（对数）· 气泡=热度</span></div>
-            <div class="chart-body chart-body-lg" id="chartScatterCostBox"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><h3>地区 × 类型 热力矩阵</h3><span class="panel-sub">颜色 = 平均评分</span></div>
-            <div class="chart-body chart-body-lg" id="chartHeatmap"></div>
-          </div>
+        <div class="panel">
+          <div class="panel-head"><h3>评分 × 热度散点</h3><span class="panel-sub">横轴=豆瓣评分 · 纵轴=评价人数（对数轴）· 气泡大小=热度 · 每点可点击查看详情</span></div>
+          <div class="chart-body chart-body-xl" id="chartScatterCostBox"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>地区 × 类型 热力矩阵</h3><span class="panel-sub">热门地区 × 热门类型 · 颜色 = 平均评分（含合拍片拆分计数）</span></div>
+          <div class="chart-body chart-body-xl" id="chartHeatmap"></div>
         </div>
         <div class="panel-row panel-row-2">
           <div class="panel">
-            <div class="panel-head"><h3>档期 × 类型</h3><span class="panel-sub">气泡 = 平均票房，颜色 = 评分</span></div>
+            <div class="panel-head"><h3>档期 × 类型</h3><span class="panel-sub">气泡 = 影片数量，颜色 = 平均评分</span></div>
             <div class="chart-body chart-body-lg" id="chartSeasonAnalysis"></div>
           </div>
           <div class="panel">
@@ -367,31 +365,31 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <!-- ========== JS 文件（按依赖顺序加载） ========== -->
-<script src="js/config.js"></script>
+<script src="js/config.js?v=20261023a"></script>
 <!-- 设计令牌：CSS 变量与 ECharts 主题同源，UI 调优只改 theme.js -->
-<script src="js/theme.js"></script>
+<script src="js/theme.js?v=20261023a"></script>
 <!-- 图表声明表：新增图表在这里加一行 -->
-<script src="js/chart-config.js"></script>
-<script src="js/utils/debounce.js"></script>
-<script src="js/utils/api.js"></script>
-<script src="js/utils/ui.js"></script>
+<script src="js/chart-config.js?v=20261023a"></script>
+<script src="js/utils/debounce.js?v=20261023a"></script>
+<script src="js/utils/api.js?v=20261023a"></script>
+<script src="js/utils/ui.js?v=20261023a"></script>
 <!-- 图表注册中心：统一 init/render/resize/dispose/懒渲染/错误态 -->
-<script src="js/charts/registry.js"></script>
+<script src="js/charts/registry.js?v=20261023a"></script>
 
-  <script src="js/charts/ratingDistribution.js"></script>
-  <script src="js/charts/yearTrend.js"></script>
-  <script src="js/charts/topWorksBar.js"></script>
-  <script src="js/charts/genreCompare.js"></script>
-<script src="js/charts/scatterCostBox.js"></script>
-<script src="js/charts/heatmap.js"></script>
-<script src="js/charts/seasonAnalysis.js"></script>
-<script src="js/charts/topDirectors.js"></script>
+  <script src="js/charts/ratingDistribution.js?v=20261023a"></script>
+  <script src="js/charts/yearTrend.js?v=20261023a"></script>
+  <script src="js/charts/topWorksBar.js?v=20261023a"></script>
+  <script src="js/charts/genreCompare.js?v=20261023a"></script>
+<script src="js/charts/scatterCostBox.js?v=20261023a"></script>
+<script src="js/charts/heatmap.js?v=20261023a"></script>
+<script src="js/charts/seasonAnalysis.js?v=20261023a"></script>
+<script src="js/charts/topDirectors.js?v=20261023a"></script>
 
 <!-- 排行榜卡片（豆瓣式：封面/标题/年份/导演/主演/梗概） -->
-<script src="js/ranking.js"></script>
+<script src="js/ranking.js?v=20261023a"></script>
 <!-- F9 作品表格/卡片 -->
-<script src="js/works-table.js"></script>
+<script src="js/works-table.js?v=20261023a"></script>
 <!-- 主入口：菜单路由 + 各页面数据加载 -->
-<script src="js/main.js"></script>
+<script src="js/main.js?v=20261023a"></script>
 </body>
 </html>
