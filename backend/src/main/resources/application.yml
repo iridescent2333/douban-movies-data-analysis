@@ -59,6 +59,12 @@ spring:
 # （曾尝试 ${SERVER_PORT:8081}，结果被操作系统同名环境变量 SERVER__PORT 覆盖，故保持字面量）
 server:
   port: 8081
+  # 响应压缩：统计接口返回的 JSON 体积大（散点/热力数据可达数十 KB），
+  # 开启 gzip 后传输量通常下降 70%+，前端首屏与筛选刷新都明显更快。
+  compression:
+    enabled: true
+    min-response-size: 1024      # 小于 1KB 的响应不压缩，避免得不偿失
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript,text/javascript
   error:
     # 出错时给前端可读的错误描述，但不暴露堆栈，避免信息泄漏
     include-message: always

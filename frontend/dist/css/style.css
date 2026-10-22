@@ -86,7 +86,9 @@ input, select, button { font-family: inherit; font-size: inherit; }
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .logo { display: flex; align-items: center; }
-.app-title { font-size: 18px; font-weight: 700; }
+.app-title { font-size: 18px; font-weight: 700; line-height: 1.2; }
+.header-titles { display: flex; flex-direction: column; gap: 1px; }
+.app-subtitle { font-size: 12px; color: var(--text-muted); }
 
 .theme-toggle {
   width: 40px;
@@ -145,6 +147,58 @@ body.dark .icon-moon { display: inline; }
   transition: border-color var(--transition);
 }
 .range-inputs input:focus { border-color: var(--primary); }
+
+/* F4 评分快捷区间（chips） */
+.rating-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rating-chips .chip {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.rating-chips .chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.rating-chips .chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* 图表标题右侧的视图切换（F7 / F8 / F9） */
+.chart-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+}
+.chart-toggle .toggle-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+.chart-toggle .toggle-btn:hover { color: var(--primary); }
+.chart-toggle .toggle-btn.active {
+  background: var(--card-bg);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+body.dark .chart-toggle .toggle-btn.active { background: var(--surface); }
 .range-inputs span { color: var(--text-muted); }
 
 .checkbox-scroll {
@@ -232,6 +286,27 @@ body.dark .icon-moon { display: inline; }
  * 核心图表网格
  * ============================================================ */
 .core-charts { padding: 20px 24px 0; }
+.deep-charts { padding: 20px 24px 0; }
+
+/* 区块标题（核心洞察 / 深度分析 / 作品列表） */
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.section-heading h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding-left: 10px;
+  border-left: 3px solid var(--primary);
+  line-height: 1.2;
+}
+.section-hint { font-size: 12px; color: var(--text-muted); }
+.section-actions { display: flex; gap: 8px; }
+.chart-subtitle { font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+
 .chart-grid { display: grid; gap: 16px; }
 .chart-grid-2x2 {
   grid-template-columns: repeat(2, 1fr);
@@ -281,6 +356,33 @@ body.dark .chart-body.loading::after { background: rgba(0,0,0,0.3); }
   color: var(--text-muted);
   font-size: 13px;
 }
+
+/* 图表区域错误态：ECharts 未加载 / 渲染异常时给出明确提示，而不是永远停在"加载中..." */
+.chart-body.error::after {
+  content: "图表加载失败，请检查 vendor/echarts.min.js 或网络";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e04040;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  text-align: center;
+  padding: 0 16px;
+}
+body.dark .chart-body.error::after { background: rgba(0, 0, 0, 0.45); color: #ff7a7a; }
+
+/* 列表占位（加载中 / 空 / 失败） */
+.list-placeholder {
+  grid-column: 1 / -1;
+  padding: 40px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.list-placeholder.error { color: #e04040; }
+body.dark .list-placeholder.error { color: #ff7a7a; }
 
 /* ============================================================
  * Tab 切换面板
@@ -337,6 +439,83 @@ body.dark .chart-body.loading::after { background: rgba(0,0,0,0.3); }
 .page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
 .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 #pageInfo { color: var(--text-muted); font-size: 13px; }
+
+/* ============================================================
+ * F9 作品详情表格
+ * ============================================================ */
+.works-table-section { padding: 20px 24px; }
+.table-wrap {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+.works-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.works-table thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.works-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+.works-table tbody tr:last-child td { border-bottom: none; }
+.works-table tbody tr.works-row { cursor: pointer; transition: background var(--transition); }
+.works-table tbody tr.works-row:hover { background: var(--primary-soft); }
+
+.col-id { width: 64px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.col-title { max-width: 260px; }
+.col-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.col-director { max-width: 180px; color: var(--text-secondary); }
+.col-genres { color: var(--text-secondary); }
+.col-rating { font-weight: 700; font-variant-numeric: tabular-nums; }
+.col-votes { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.col-year { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* 评分分档配色：一眼看出优质作品 */
+.rating-top { color: #d4380d; }
+.rating-high { color: #42AC4E; }
+.rating-mid { color: var(--text-primary); }
+.rating-low { color: var(--text-muted); }
+body.dark .rating-top { color: #ff7875; }
+body.dark .rating-high { color: #73d13d; }
+
+.table-placeholder {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.table-placeholder.error { color: #e04040; }
+body.dark .table-placeholder.error { color: #ff7a7a; }
+
+.table-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.page-size { font-size: 12px; color: var(--text-muted); }
+
+.detail-intro {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
 
 .movie-grid {
   display: grid;

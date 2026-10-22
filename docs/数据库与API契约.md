@@ -1,7 +1,8 @@
 # 数据库与 API 契约
 
 > 给谁看的：前后端开发联调参考 + 老师验收看接口设计  
-> 阅读指引：**先看 ER 图理解数据模型，再查表字段，最后看 API 示例 JSON**。
+> 阅读指引：**先看 ER 图理解数据模型 → 查表字段 → 第四节看课程要求接口 A1-A5（前端主用）→ 第五节看拓展接口**。
+> 在线文档：启动后端后访问 Swagger UI <http://localhost:8081/swagger-ui.html>（本文件是其静态快照，改接口后两边同步更新）。
 
 ---
 
@@ -116,9 +117,128 @@
 
 ---
 
-## 四、API 契约（9 个接口 + 请求/响应 JSON 示例）
+## 四、课程要求接口契约（A1-A5）★ 前端主用
 
-### 4.1 电影列表（分页 + 多条件筛选）
+> 对应课程《项目需求文档三：电影数据分析看板》的接口清单，路径与要求逐一一致。
+
+### 4.1 A1 类型列表
+
+```
+GET /api/types
+```
+
+**响应**
+
+```json
+{ "code": 0, "message": "ok", "data": ["Cult", "主旋律", "剧情", "动作", "动画", "喜剧", "恐怖", "悬疑", "战争", "文艺", "爱情", "短片", "科幻", "纪录片"] }
+```
+
+### 4.2 A2 作品分页列表（F9 数据源）
+
+```
+GET /api/works?type=科幻&yearStart=2015&yearEnd=2025&ratingMin=8&title=星际&page=0&size=10
+```
+
+**Query 参数**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | Integer | ❌ | 页码，从 0 开始，默认 0 |
+| size | Integer | ❌ | 每页条数，默认 20（前端 F9 表格固定 10） |
+| type | String | ❌ | 类型（精确匹配，来自 A1） |
+| yearStart | Integer | ❌ | 起始年份（含） |
+| yearEnd | Integer | ❌ | 结束年份（含） |
+| ratingMin | BigDecimal | ❌ | 最低评分（含） |
+| ratingMax | BigDecimal | ❌ | 最高评分（含） |
+| title | String | ❌ | 标题模糊匹配 |
+
+**响应**（Spring Data Page）
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "content": [
+      {
+        "id": 3080, "title": "冷酷的谎言往事", "director": "Satyajit Ray",
+        "leadActor": "Hrithik Roshan; Scarlett Johansson", "country": "德国",
+        "year": 2016, "duration": 123, "rating": 9.8, "voteCount": 38616,
+        "posterUrl": "", "genres": ["动画", "Cult", "文艺"]
+      }
+    ],
+    "totalElements": 850, "totalPages": 85, "number": 0, "size": 10,
+    "first": true, "last": false, "empty": false
+  }
+}
+```
+
+### 4.3 A3 作品详情
+
+```
+GET /api/works/3080
+```
+
+**响应**：字段同 4.2 的列表项，另加 `intro`（简介）与 `financial`（财务对象，无数据时为 `null`）：
+
+```json
+{
+  "code": 0, "message": "ok",
+  "data": {
+    "id": 3080, "title": "冷酷的谎言往事", "genres": ["动画", "Cult", "文艺"],
+    "rating": 9.8, "voteCount": 38616, "year": 2016, "country": "德国",
+    "intro": "当和平时期来临……",
+    "financial": { "budgetWan": null, "boxOfficeWan": null, "releaseDate": "2016-08-28", "seasonTag": "暑期档" }
+  }
+}
+```
+
+> 不存在的 id 返回 `{"code":404,...}`（HTTP 404）。
+
+### 4.4 A4 统计数据（评分分布 + 年度趋势 + 类型对比）
+
+```
+GET /api/works/stats?type=科幻&yearStart=2015
+```
+
+**响应**
+
+```json
+{
+  "code": 0, "message": "ok",
+  "data": {
+    "ratingDistribution": [
+      { "range": "2.0-2.5", "count": 1, "avgRating": 2.4 },
+      { "range": "6.0-6.5", "count": 4, "avgRating": 6.2 }
+    ],
+    "yearTrend":  [ { "year": 1995, "count": 34, "avgRating": 6.94, "avgBoxOffice": 129978056.79 } ],
+    "genreCompare": [ { "genre": "剧情", "avgRating": 7.31, "avgBoxOffice": 5100.00, "count": 135 } ]
+  }
+}
+```
+
+> `ratingDistribution` 固定返回 16 个评分段（2.0-10.0，0.5 分粒度），无数据的段 `count=0`，保证直方图 x 轴连续。
+> `yearTrend` / `genreCompare` 的字段与下面的拓展接口完全一致，前端转换层可直接复用。
+
+### 4.5 A5 热门作品 TOP N
+
+```
+GET /api/works/top?n=10&by=rating
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| n | Integer | ❌ | 返回条数，默认 10 |
+| by | String | ❌ | `rating` 按评分降序（默认）/ `votes` 按评价人数降序 |
+| 其他 | — | ❌ | 同 A2 的筛选参数 |
+
+**响应**：`MovieDTO` 数组（字段同 A2 列表项）。
+
+---
+
+## 五、拓展接口契约（深度分析 + 聚合）
+
+### 5.1 电影列表（分页 + 多条件筛选）
 
 ```
 GET /api/movies?yearStart=2010&yearEnd=2020&country=美国&ratingMin=8.0&ratingMax=9.0&genres=科幻&genres=动作&title=星际&page=0&size=5
@@ -171,7 +291,7 @@ GET /api/movies?yearStart=2010&yearEnd=2020&country=美国&ratingMin=8.0&ratingM
 
 ---
 
-### 4.2 电影详情
+### 5.2 电影详情
 
 ```
 GET /api/movies/123
@@ -210,7 +330,7 @@ GET /api/movies/123
 
 ---
 
-### 4.3 筛选器下拉可选项
+### 5.3 筛选器下拉可选项
 
 ```
 GET /api/movies/filters
@@ -232,7 +352,7 @@ GET /api/movies/filters
 
 ---
 
-### 4.4 年份趋势
+### 5.4 年份趋势
 
 ```
 GET /api/stats/year-trend
@@ -256,7 +376,7 @@ GET /api/stats/year-trend
 
 ---
 
-### 4.5 类型对比
+### 5.5 类型对比
 
 ```
 GET /api/stats/genre-compare
@@ -279,7 +399,7 @@ GET /api/stats/genre-compare
 
 ---
 
-### 4.6 成本 vs 票房散点
+### 5.6 成本 vs 票房散点
 
 ```
 GET /api/stats/scatter-cost-box
@@ -303,7 +423,7 @@ GET /api/stats/scatter-cost-box
 
 ---
 
-### 4.7 国家 × 类型 热力图
+### 5.7 国家 × 类型 热力图
 
 ```
 GET /api/stats/heatmap
@@ -328,7 +448,7 @@ GET /api/stats/heatmap
 
 ---
 
-### 4.8 档期 × 类型 分析
+### 5.8 档期 × 类型 分析
 
 ```
 GET /api/stats/season-analysis
@@ -350,7 +470,7 @@ GET /api/stats/season-analysis
 
 ---
 
-### 4.9 导演 TOP N
+### 5.9 导演 TOP N
 
 ```
 GET /api/stats/top-directors?n=10
@@ -377,9 +497,45 @@ GET /api/stats/top-directors?n=10
 }
 ```
 
+### 5.10 看板聚合（一次请求返回整屏数据）★ 前端首屏与筛选都走这个
+
+```
+GET /api/stats/overview?n=20&yearStart=2015&yearEnd=2025&country=美国
+```
+
+**Query 参数**：与其它 stats 接口相同的筛选参数（`yearStart` / `yearEnd` / `genres` / `country` / `ratingMin` / `ratingMax`），外加 `n`（导演榜条数，默认 10）。
+
+**响应**
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "kpi": {
+      "movieCount": 850,
+      "avgRating": 7.18,
+      "yearMin": 1995,
+      "yearMax": 2025,
+      "countryCount": 10
+    },
+    "yearTrend":     [ { "year": 1995, "count": 34, "avgRating": 6.94, "avgBoxOffice": 129978056.79 } ],
+    "genreCompare":  [ { "genre": "剧情", "avgRating": 7.31, "avgBoxOffice": 5100.00, "count": 135 } ],
+    "scatterCostBox":[ { "budgetWan": 16500.00, "boxOfficeWan": 83500.00, "rating": 9.4, "title": "盗梦空间", "country": "美国" } ],
+    "heatmap":       [ { "country": "美国", "genre": "科幻", "avgRating": 7.55, "count": 45 } ],
+    "seasonAnalysis":[ { "seasonTag": "暑期档", "genre": "动画", "avgBoxOffice": 12500.00, "avgRating": 7.82, "count": 28 } ],
+    "topDirectors":  [ { "director": "Christopher Nolan", "count": 12, "avgRating": 8.45 } ]
+  }
+}
+```
+
+> 六个数组的字段与各自的独立接口 **完全一致**，前端的数据转换层可直接复用。
+> 设计意图：后端只查一次 `movies` + 一次 `movie_financials`，6 类图表基于同一份数据在内存里算出，
+> 把"6 次全表查询 + 6 次网络往返"压缩成"1 次查询 + 1 次往返"（实测 2725ms → 600ms）。
+
 ---
 
-## 五、分页参数约定
+## 六、分页参数约定
 
 | 方向       | 参数 | 说明                                                    |
 |------------|------|---------------------------------------------------------|
@@ -406,7 +562,7 @@ document.getElementById('nextPage').disabled = (currentPage >= totalPages);
 
 ---
 
-## 六、设计决策记录
+## 七、设计决策记录
 
 | 问题                                  | 决策                                                  | 理由                                         |
 |---------------------------------------|-------------------------------------------------------|----------------------------------------------|

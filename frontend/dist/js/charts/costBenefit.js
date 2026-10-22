@@ -11,7 +11,9 @@
   var chart = null;
 
   function getTheme() {
-    return document.body.classList.contains('dark') ? 'dark' : null;
+    // 统一走设计令牌：主题名与配色集中由 js/theme.js 管理（app-light / app-dark）
+    return global.UI_THEME ? global.UI_THEME.current()
+      : (document.body.classList.contains('dark') ? 'dark' : null);
   }
 
   /**

@@ -1,11 +1,22 @@
 /**
  * main.js —— 豆瓣电影数据洞察看板 主入口
+ *
+ * 项目定位（课程要求）：帮助用户发现优质作品、了解评分分布与类型趋势。
+ *
  * 职责：
- *   1. 初始化筛选器列表（GET /api/movies/filters）
- *   2. 绑定筛选 / 明暗主题 / Tab / 分页事件
- *   3. 并发请求所有 API → 渲染对应 ECharts
- *   4. 电影列表 & 详情模态框
+ *   1. 初始化筛选器：A1 GET /api/types 类型下拉 + F4 评分快捷区间
+ *   2. 绑定筛选 / 主题 / Tab / 分页 / 图表联动事件
+ *   3. 拉取聚合数据（GET /api/stats/overview）→ 交给图表注册中心渲染 F5-F8 图表
+ *   4. F9 作品列表表格（A2 GET /api/works，每页 10 条）+ 详情弹窗（A3）
  *   5. 全局异常处理
+ *
+ * 性能要点：
+ *   - 1 次聚合接口拿全部图表数据 + KPI，取代原来多个接口并行
+ *   - 深度分析区图表滚动进入视口才渲染（IntersectionObserver）
+ *   - 连续筛选时取消上一轮未返回的请求，避免旧数据覆盖新数据
+ *   - 主题切换只重绘图表，不再重新请求接口
+ *
+ * 兼容处理：后端未提供 /api/stats/overview 时，自动降级为 A4/A5 + 旧 stats 接口的多请求模式。
  */
 (function (global) {
   'use strict';
@@ -13,25 +24,33 @@
   var CONFIG = global.APP_CONFIG;
   var UI = global.UI_UTILS;
   var API = global.API;
-  var Charts = global.Charts;
+  var Registry = global.ChartRegistry;
+  var WorksTable = global.WorksTable;
+
+  /** 每页条数（课程要求 F9：每页 10 条） */
+  var PAGE_SIZE = 10;
 
   /** 当前筛选条件 */
   var filterState = {
+    type: '',           // F2 类型（单选下拉框）
     yearStart: null,
     yearEnd: null,
-    genres: [],        // 多选数组
-    country: '',
     ratingMin: null,
     ratingMax: null,
     title: '',
   };
 
-  /** 电影列表分页状态 */
+  /** 电影列表分页状态（1-based，与 UI 一致） */
   var pageState = {
     page: 1,
-    size: CONFIG.DEFAULT_PAGE_SIZE,
+    size: PAGE_SIZE,
     total: 0,
   };
+
+  /** 最近一次拿到的聚合数据（主题切换 / TOP10 切换时复用，避免重新请求） */
+  var lastOverview = null;
+  /** 是否使用兼容模式（后端还没有 /api/stats/overview 时走 A4/A5 + 旧接口） */
+  var legacyMode = false;
 
   /* ============================================================
    * 1. 启动入口
@@ -41,63 +60,65 @@
     bindThemeToggle();
     bindTabSwitch();
     bindResize();
+    bindEChartsReady();
+    bindFilterControls();
+    bindChartToggles();
+    bindWorksListEvents();
 
-    // ECharts 走 CDN 引入，网络不可达时给出明确提示，避免图表无声失败
-    if (!window.echarts) {
-      UI.showToast('ECharts 资源加载失败，请检查网络后刷新页面', 'error');
-    }
+    // 注册 ECharts 主题（app-light / app-dark），必须在任何图表 init 之前
+    if (global.UI_THEME) global.UI_THEME.registerEChartsThemes();
 
-    initFilters().then(function () {
-      bindFilterEvents();
-      bindPagerEvents();
-      bindModalClose();
+    // 注册图表清单 + 数据转换函数（新增图表只需改 chart-config.js）
+    Registry.configure({
+      defs: global.CHART_DEFS,
+      transformers: {
+        transformYearTrend: transformYearTrend,
+        transformScatter: transformScatter,
+        transformHeatmap: transformHeatmap,
+        transformSeason: transformSeason,
+        transformRegionCulture: transformRegionCulture,
+      },
+    });
+
+    WorksTable.setView('table');
+    loadTypes().then(function () {
       reloadAll();
     }).catch(function (err) {
-      UI.showToast('初始化筛选器失败：' + (err.message || err), 'error');
+      UI.showToast('初始化类型列表失败：' + (err.message || err), 'error');
+      reloadAll();
+    });
+  }
+
+  /**
+   * 等待 ECharts 就绪（本地 vendor 文件优先，失败时由 loader 回退 CDN）
+   */
+  function bindEChartsReady() {
+    global.addEventListener('echarts:ready', function () {
+      if (global.UI_THEME) global.UI_THEME.registerEChartsThemes();
+      Registry.renderAll(lastOverview);   // 数据已到但图表库晚到 → 补渲染
+    });
+    global.addEventListener('echarts:error', function () {
+      UI.showToast('图表库（ECharts）加载失败：请确认 vendor/echarts.min.js 存在或网络可达 CDN', 'error');
+      (global.CHART_DEFS || []).forEach(function (def) {
+        Registry.setState(def, 'error');
+      });
     });
   }
 
   /* ============================================================
-   * 2. 从后端拉取筛选器可选项 → 渲染 checkbox / select
+   * 2. F2 类型筛选：A1 GET /api/types → 下拉框
    * ============================================================ */
-  function initFilters() {
-    return API.getWithCache('/api/movies/filters', null).then(function (data) {
-      // 期望 data: { genres: [...], countries: [...], years: [...] }
-      renderGenreCheckboxes(data.genres || []);
-      renderCountrySelect(data.countries || []);
-
-      // 如果后端返回了年份范围，填入占位
-      if (data.years && data.years.length >= 2) {
-        document.getElementById('yearStart').placeholder = data.years[0];
-        document.getElementById('yearEnd').placeholder = data.years[data.years.length - 1];
-      }
-    });
-  }
-
-  function renderGenreCheckboxes(genres) {
-    var box = document.getElementById('genreCheckboxes');
-    if (!box) return;
-    box.innerHTML = '';
-    genres.forEach(function (g) {
-      var label = document.createElement('label');
-      var input = document.createElement('input');
-      input.type = 'checkbox';
-      input.value = g;
-      input.className = 'genre-cb';
-      label.appendChild(input);
-      label.appendChild(document.createTextNode(g));
-      box.appendChild(label);
-    });
-  }
-
-  function renderCountrySelect(countries) {
-    var sel = document.getElementById('countrySelect');
-    if (!sel) return;
-    countries.forEach(function (c) {
-      var opt = document.createElement('option');
-      opt.value = c;
-      opt.textContent = c;
-      sel.appendChild(opt);
+  function loadTypes() {
+    return API.getWithCache('/api/types', null).then(function (types) {
+      var sel = document.getElementById('typeSelect');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">全部类型</option>';
+      (types || []).forEach(function (t) {
+        var opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        sel.appendChild(opt);
+      });
     });
   }
 
@@ -109,72 +130,105 @@
     var ye = document.getElementById('yearEnd').value;
     var rm = document.getElementById('ratingMin').value;
     var rM = document.getElementById('ratingMax').value;
-    var title = document.getElementById('titleSearch').value.trim();
-    var country = document.getElementById('countrySelect').value;
-
-    var genreCbs = document.querySelectorAll('.genre-cb:checked');
-    var genres = [];
-    genreCbs.forEach(function (cb) { genres.push(cb.value); });
 
     filterState = {
+      type: document.getElementById('typeSelect').value,
       yearStart: ys ? +ys : null,
-      yearEnd:   ye ? +ye : null,
-      genres:    genres,
-      country:   country,
+      yearEnd: ye ? +ye : null,
       ratingMin: rm ? +rm : null,
       ratingMax: rM ? +rM : null,
-      title:     title,
+      title: document.getElementById('titleSearch').value.trim(),
     };
   }
 
-  /** 把 filterState 转成后端 query 参数 */
+  /** 把 filterState 转成后端 query 参数（type 单值 → genres 列表，后端支持两种形态） */
   function filterParams() {
     var p = {};
+    if (filterState.type) p.type = filterState.type;
     if (filterState.yearStart) p.yearStart = filterState.yearStart;
-    if (filterState.yearEnd)   p.yearEnd   = filterState.yearEnd;
-    if (filterState.genres.length) p.genres = filterState.genres.join(',');
-    if (filterState.country)   p.country   = filterState.country;
+    if (filterState.yearEnd) p.yearEnd = filterState.yearEnd;
     if (filterState.ratingMin) p.ratingMin = filterState.ratingMin;
     if (filterState.ratingMax) p.ratingMax = filterState.ratingMax;
-    if (filterState.title)     p.title     = filterState.title;
+    if (filterState.title) p.title = filterState.title;
     return p;
   }
 
   /* ============================================================
-   * 4. 绑定筛选事件（debounce 300ms）
+   * 4. 绑定筛选控件（F3 年份 / F4 评分快捷区间 / 关键词 / 重置）
    * ============================================================ */
-  function bindFilterEvents() {
+  function bindFilterControls() {
     var trigger = UI.debounce(function () {
       collectFilterState();
-      pageState.page = 1;  // 筛选后回到第 1 页
+      pageState.page = 1;
       reloadAll();
     }, CONFIG.DEBOUNCE_MS);
 
-    // 输入类：keyup / input
+    // F3 年份 + 关键词：输入即触发（防抖 300ms）
     ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax', 'titleSearch'].forEach(function (id) {
       var el = document.getElementById(id);
-      if (el) el.addEventListener('input', trigger);
+      if (el) el.addEventListener('input', function () {
+        clearActiveChip();      // 手动改区间时取消快捷选项高亮
+        trigger();
+      });
     });
-    // checkbox / select：change
-    document.getElementById('genreCheckboxes').addEventListener('change', trigger);
-    document.getElementById('countrySelect').addEventListener('change', trigger);
 
-    // 重置按钮
+    // F2 类型下拉框
+    document.getElementById('typeSelect').addEventListener('change', trigger);
+
+    // F4 评分快捷区间
+    var chips = document.getElementById('ratingChips');
+    if (chips) {
+      chips.addEventListener('click', function (e) {
+        var btn = e.target.closest('.chip');
+        if (!btn) return;
+        chips.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
+        btn.classList.add('active');
+        document.getElementById('ratingMin').value = btn.dataset.min || '';
+        document.getElementById('ratingMax').value = btn.dataset.max || '';
+        trigger();
+      });
+    }
+
+    // 重置
     document.getElementById('resetBtn').addEventListener('click', function () {
       document.getElementById('yearStart').value = '';
       document.getElementById('yearEnd').value = '';
       document.getElementById('ratingMin').value = '';
       document.getElementById('ratingMax').value = '';
       document.getElementById('titleSearch').value = '';
-      document.getElementById('countrySelect').value = '';
-      var cbs = document.querySelectorAll('.genre-cb');
-      cbs.forEach(function (cb) { cb.checked = false; });
-      collectFilterState();
+      document.getElementById('typeSelect').value = '';
+      clearActiveChip();
+      document.querySelector('#ratingChips .chip[data-min=""][data-max=""]').classList.add('active');
       pageState.page = 1;
       reloadAll();
     });
 
-    // 图表联动：点击年代趋势柱子 → 把该年填入筛选
+    // 图表联动：点击直方图评分段 → 写入评分筛选
+    global.addEventListener('filter:ratingClick', function (e) {
+      var d = e.detail || {};
+      if (d.min == null && d.max == null) return;
+      document.getElementById('ratingMin').value = d.min != null ? d.min : '';
+      document.getElementById('ratingMax').value = d.max != null ? d.max : '';
+      clearActiveChip();
+      collectFilterState();
+      pageState.page = 1;
+      reloadAll();
+      UI.showToast('已筛选评分段 ' + (d.range || ''), 'success');
+    });
+
+    // 图表联动：点击类型对比图的类型 → 写入类型下拉框
+    global.addEventListener('filter:genreClick', function (e) {
+      var genre = e.detail && e.detail.genre;
+      if (!genre) return;
+      var sel = document.getElementById('typeSelect');
+      sel.value = genre;
+      collectFilterState();
+      pageState.page = 1;
+      reloadAll();
+      UI.showToast('已筛选类型「' + genre + '」', 'success');
+    });
+
+    // 图表联动：点击年代趋势柱子 → 按该年份筛选
     global.addEventListener('filter:yearClick', function (e) {
       var year = e.detail && e.detail.year;
       if (!year) return;
@@ -185,153 +239,246 @@
       reloadAll();
       UI.showToast('已按 ' + year + ' 年筛选', 'success');
     });
+
+    // 图表联动：点击 TOP10 / 卡片 → 打开详情
+    global.addEventListener('movie:open', function (e) {
+      var id = e.detail && e.detail.id;
+      if (id) openMovieDetail(id);
+    });
+  }
+
+  function clearActiveChip() {
+    var chips = document.getElementById('ratingChips');
+    if (chips) chips.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
   }
 
   /* ============================================================
-   * 5. 绑定分页
+   * 5. 图表视图切换（F7 按评分/按评价人数，F8 柱状/雷达）
    * ============================================================ */
-  function bindPagerEvents() {
+  function bindChartToggles() {
+    var topToggle = document.getElementById('topWorksToggle');
+    if (topToggle) {
+      topToggle.addEventListener('click', function (e) {
+        var btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        topToggle.querySelectorAll('.toggle-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        var mod = global.Charts && global.Charts.topWorks;
+        if (mod && mod.setMode) {
+          mod.setMode(btn.dataset.by);
+          mod.render(lastOverview ? lastOverview.topWorks : null);   // 本地重排，不重新请求
+        }
+      });
+    }
+
+    var genreToggle = document.getElementById('genreCompareToggle');
+    if (genreToggle) {
+      genreToggle.addEventListener('click', function (e) {
+        var btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        genreToggle.querySelectorAll('.toggle-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        var mod = global.Charts && global.Charts.genreCompare;
+        if (mod && mod.setMode) {
+          mod.setMode(btn.dataset.mode);
+          mod.render(lastOverview ? lastOverview.genreCompare : null);
+        }
+      });
+    }
+
+    var viewToggle = document.getElementById('viewToggle');
+    if (viewToggle) {
+      viewToggle.addEventListener('click', function (e) {
+        var btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        viewToggle.querySelectorAll('.toggle-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        WorksTable.setView(btn.dataset.view);
+        loadWorksPage();   // 用当前页数据重绘成对应视图
+      });
+    }
+  }
+
+  /* ============================================================
+   * 6. F9 作品列表（A2）+ 分页
+   * ============================================================ */
+  function bindWorksListEvents() {
+    // 事件委托：表格行 / 卡片点击都能打开详情
+    ['worksTableBody', 'movieGrid'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', function (e) {
+        var row = e.target.closest('[data-id]');
+        if (row && row.dataset.id) openMovieDetail(row.dataset.id);
+      });
+    });
+
     document.getElementById('prevPage').addEventListener('click', function () {
       if (pageState.page > 1) {
         pageState.page--;
-        loadMovieList();
+        loadWorksPage();
       }
     });
     document.getElementById('nextPage').addEventListener('click', function () {
       var totalPage = Math.max(1, Math.ceil(pageState.total / pageState.size));
       if (pageState.page < totalPage) {
         pageState.page++;
-        loadMovieList();
+        loadWorksPage();
       }
     });
   }
 
   function updatePageInfo() {
     var totalPage = Math.max(1, Math.ceil(pageState.total / pageState.size));
-    document.getElementById('pageInfo').textContent =
-      pageState.page + ' / ' + totalPage;
+    document.getElementById('pageInfo').textContent = pageState.page + ' / ' + totalPage;
     document.getElementById('prevPage').disabled = pageState.page <= 1;
     document.getElementById('nextPage').disabled = pageState.page >= totalPage;
   }
 
+  /**
+   * A2：拉取当前页作品列表并渲染表格/卡片
+   */
+  function loadWorksPage() {
+    WorksTable.setState('loading');
+    var params = Object.assign(
+      // 前端 pageState.page 是 1-based，后端 page 是 0-based（Spring Data 约定）
+      { page: pageState.page - 1, size: pageState.size },
+      filterParams()
+    );
+
+    API.get('/api/works', params, { dedupe: false }).then(function (data) {
+      var list = (data && data.content) || [];
+      pageState.total = data && data.totalElements ? data.totalElements : list.length;
+      WorksTable.render(list, {
+        page: pageState.page,
+        totalPages: Math.max(1, Math.ceil(pageState.total / pageState.size)),
+        totalElements: pageState.total,
+      });
+      updatePageInfo();
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') return;
+      WorksTable.setState('error', '加载失败，请检查后端');
+    });
+  }
+
   /* ============================================================
-   * 6. 主流程：并行请求所有 API → 渲染
+   * 7. 主流程：聚合接口 → 图表 + KPI + 列表
    * ============================================================ */
   function reloadAll() {
+    // 取消上一轮未完成的请求，避免旧数据后到覆盖新数据
+    API.cancelInFlight();
+
     // 标记 loading
-    [
-      'chartYearTrend', 'chartGenreCompare', 'chartScatterCostBox', 'chartHeatmap',
-      'chartSeasonAnalysis', 'chartTopDirectors', 'chartCostBenefit', 'chartRegionCulture',
-    ].forEach(function (id) { UI.showLoading(id); });
+    (global.CHART_DEFS || []).forEach(function (def) {
+      UI.showLoading(def.containerId);
+    });
 
     var params = filterParams();
+    var query = Object.assign({ n: CONFIG.TOP_N }, params);
 
-    // 并发请求
-    Promise.all([
-      // KPI + 电影列表（只取 totalElements 做总数，content 用 size=1 减轻负担）
-      API.get('/api/movies', Object.assign({ page: 0, size: 1 }, params)).catch(function () { return null; }),
-      // 各 stats
-      API.get('/api/stats/year-trend', params).catch(function () { return null; }),
-      API.get('/api/stats/genre-compare', params).catch(function () { return null; }),
-      API.get('/api/stats/scatter-cost-box', params).catch(function () { return null; }),
-      API.get('/api/stats/heatmap', params).catch(function () { return null; }),
-      API.get('/api/stats/season-analysis', params).catch(function () { return null; }),
-      API.get('/api/stats/top-directors', { n: CONFIG.TOP_N }).catch(function () { return null; }),
-    ]).then(function (results) {
-      // 注意：顺序与 Promise.all 数组对应
-      // results[0]  = movies分页数据 (拿 total + 算 KPI)
-      // results[1]  = yearTrend   —— 后端返回 [{year, count, avgRating, avgBoxOffice}]
-      // results[2]  = genreCompare —— 后端返回 [{genre, avgRating, avgBoxOffice, count}] ✅匹配
-      // results[3]  = scatterCostBox —— 后端返回 [{budgetWan, boxOfficeWan, rating, title, country}]
-      // results[4]  = heatmap   —— 后端返回 [{country, genre, avgRating, count}]
-      // results[5]  = seasonAnalysis —— 后端返回 [{season, genre, avgBox, avgRating, count}]
-      // results[6]  = topDirectors —— 后端返回 [{director, count, avgRating}] ✅匹配
+    if (legacyMode) {
+      loadLegacy(query).catch(onLoadError);
+      return;
+    }
 
-      // ===== 数据转换层：后端扁平 DTO → 前端图表期望结构 =====
-      var yearTrendData = transformYearTrend(results[1]);
-      var scatterData = transformScatter(results[3]);
-      var heatmapData = transformHeatmap(results[4]);
-      var seasonData = transformSeason(results[5]);
-
-      // KPI 需要三份数据：movies 总数 + yearTrend 算均分/年代跨度 + heatmap 算地区数
-      renderKPIs(results[0], results[1], results[4]);
-      Charts.yearTrend.render(yearTrendData);
-      Charts.genreCompare.render(results[2]);
-      Charts.scatterCostBox.render(scatterData);
-      Charts.heatmap.render(heatmapData);
-      Charts.seasonAnalysis.render(seasonData);
-      Charts.topDirectors.render(results[6]);
-      // costBenefit 复用散点图数据
-      Charts.costBenefit.render(scatterData);
-      // regionCulture 从转换后的 heatmapData 构造（直接用 countries/genres 列表）
-      Charts.regionCulture.render(buildRegionCultureData(heatmapData));
-
-      // 最后刷新电影列表到当前页码
-      loadMovieList();
+    API.get('/api/stats/overview', query, { silent: true }).then(function (data) {
+      lastOverview = data;
+      renderKPIsFromOverview(data);
+      Registry.renderAll(data);
+      loadWorksPage();
     }).catch(function (err) {
-      UI.showToast('部分数据加载失败：' + (err.message || err), 'warning');
+      // 兼容处理：后端未升级（没有 /api/stats/overview）时自动降级
+      var msg = err && err.message ? err.message : '';
+      var missingEndpoint = /HTTP (404|405|500)/.test(msg);
+      if (missingEndpoint) legacyMode = true;
+      if (global.console) console.warn('[overview] 聚合接口不可用，降级为多接口模式：', msg);
+      loadLegacy(query).catch(onLoadError);
     });
   }
 
   /**
-   * 从分页结果 + 统计数据推断 4 个 KPI 卡片
-   * @param moviesPage  /api/movies 分页结果（Spring Data Page：{content, totalElements, ...}）
-   * @param yearTrendRaw /api/stats/year-trend 原始数组 [{year, count, avgRating, avgBoxOffice}]
-   * @param heatmapRaw   /api/stats/heatmap 原始数组 [{country, genre, avgRating, count}]
+   * 兼容模式：用课程要求的 A4 / A5 接口 + 旧 stats 接口拼出同样的 payload
    */
-  function renderKPIs(moviesPage, yearTrendRaw, heatmapRaw) {
-    var total = 0, avgRating = '-', yearSpan = '-', countries = '-';
-    if (moviesPage) {
-      // Spring Data Page 用 totalElements 而不是 total
-      total = moviesPage.totalElements || moviesPage.total || 0;
-    }
-    // 平均评分 + 年代跨度：从 year-trend 聚合（按电影数量加权，比抽样准确）
-    if (yearTrendRaw && yearTrendRaw.length) {
-      var sumRating = 0, sumCount = 0;
-      yearTrendRaw.forEach(function (d) {
-        var c = +d.count || 0;
-        sumCount += c;
-        sumRating += c * (+d.avgRating || 0);
-      });
-      if (sumCount > 0) avgRating = (sumRating / sumCount).toFixed(2);
-      var years = yearTrendRaw.map(function (d) { return +d.year; }).filter(function (y) { return !isNaN(y); });
-      if (years.length) {
-        yearSpan = Math.min.apply(null, years) + ' ~ ' + Math.max.apply(null, years);
-      }
-    }
-    // 覆盖国家/地区数：从 heatmap 原始数据去重
-    if (heatmapRaw && heatmapRaw.length) {
-      var countrySet = {};
-      heatmapRaw.forEach(function (d) { if (d.country) countrySet[d.country] = 1; });
-      countries = Object.keys(countrySet).length;
-    }
-    document.getElementById('kpiTotal').textContent = total.toLocaleString();
+  function loadLegacy(query) {
+    return Promise.all([
+      API.get('/api/works/stats', query, { dedupe: false }),
+      API.get('/api/works/top', Object.assign({ n: CONFIG.TOP_N, by: 'rating' }, query), { dedupe: false }),
+      API.get('/api/stats/scatter-cost-box', query, { dedupe: false }).catch(function () { return []; }),
+      API.get('/api/stats/heatmap', query, { dedupe: false }).catch(function () { return []; }),
+      API.get('/api/stats/season-analysis', query, { dedupe: false }).catch(function () { return []; }),
+      API.get('/api/stats/top-directors', { n: CONFIG.TOP_N }, { dedupe: false }).catch(function () { return []; }),
+      API.get('/api/movies', Object.assign({ page: 0, size: 1 }, query), { dedupe: false }).catch(function () { return null; }),
+    ]).then(function (r) {
+      var stats = r[0] || {};
+      var payload = {
+        kpi: computeKpiLocally(r[6], stats.yearTrend, r[3]),
+        ratingDistribution: stats.ratingDistribution || [],
+        yearTrend: stats.yearTrend || [],
+        genreCompare: stats.genreCompare || [],
+        topWorks: r[1] || [],
+        scatterCostBox: r[2] || [],
+        heatmap: r[3] || [],
+        seasonAnalysis: r[4] || [],
+        topDirectors: r[5] || [],
+      };
+      lastOverview = payload;
+      renderKPIsFromOverview(payload);
+      Registry.renderAll(payload);
+      loadWorksPage();
+    });
+  }
+
+  function onLoadError(err) {
+    if (err && err.name === 'AbortError') return;   // 被新请求取代，忽略
+    UI.showToast('数据加载失败：' + (err.message || err), 'warning');
+  }
+
+  /**
+   * KPI 卡片渲染：后端已算好直接用；兼容模式下前端兜底计算
+   */
+  function renderKPIsFromOverview(payload) {
+    var kpi = (payload && payload.kpi) || {};
+    var total = kpi.movieCount != null ? kpi.movieCount : 0;
+    var avgRating = kpi.avgRating != null ? (+kpi.avgRating).toFixed(2) : '-';
+    var yearSpan = (kpi.yearMin && kpi.yearMax) ? (kpi.yearMin + ' ~ ' + kpi.yearMax) : '-';
+    var countries = kpi.countryCount != null ? kpi.countryCount : '-';
+
+    document.getElementById('kpiTotal').textContent = (+total).toLocaleString();
     document.getElementById('kpiAvgRating').textContent = avgRating;
     document.getElementById('kpiYearSpan').textContent = yearSpan;
     document.getElementById('kpiCountries').textContent = countries;
   }
 
-  /**
-   * 从 heatmap 数据构造 regionCulture 桑基图所需的扁平数组
-   */
-  function buildRegionCultureData(heatmapData) {
-    if (!heatmapData || !heatmapData.data) return null;
-    var countries = heatmapData.countries || [];
-    var genres = heatmapData.genres || [];
-    return heatmapData.data.map(function (d) {
-      var genreIdx = d[0], countryIdx = d[1], rating = d[2];
-      return {
-        country: countries[countryIdx],
-        genre: genres[genreIdx],
-        avgRating: rating,
-        count: 1,
-      };
-    });
+  /** 兼容模式下的 KPI 前端计算 */
+  function computeKpiLocally(moviesPage, yearTrendRaw, heatmapRaw) {
+    var total = 0, avgRating = 0, yearMin = null, yearMax = null, countryCount = 0;
+    if (moviesPage) total = moviesPage.totalElements || moviesPage.total || 0;
+    if (yearTrendRaw && yearTrendRaw.length) {
+      var sumRating = 0, sumCount = 0, years = [];
+      yearTrendRaw.forEach(function (d) {
+        var c = +d.count || 0;
+        sumCount += c;
+        sumRating += c * (+d.avgRating || 0);
+        var y = +d.year;
+        if (!isNaN(y)) years.push(y);
+      });
+      if (sumCount > 0) avgRating = sumRating / sumCount;
+      if (years.length) {
+        yearMin = Math.min.apply(null, years);
+        yearMax = Math.max.apply(null, years);
+      }
+    }
+    if (heatmapRaw && heatmapRaw.length) {
+      var countrySet = {};
+      heatmapRaw.forEach(function (d) { if (d.country) countrySet[d.country] = 1; });
+      countryCount = Object.keys(countrySet).length;
+    }
+    return { movieCount: total, avgRating: +avgRating.toFixed(2), yearMin: yearMin, yearMax: yearMax, countryCount: countryCount };
   }
 
   /* ============================================================
    * 数据转换层：后端扁平 DTO → 前端图表期望结构
-   * 后端统一返回 [{field, field, ...}]，前端期望不同形状
+   * （新增图表时在这里加一个 transform*，并在 chart-config.js 里声明）
    * ============================================================ */
 
   /** yearTrend: [{year, count, avgRating}] → {years:[], counts:[], avgRatings:[]} */
@@ -356,7 +503,7 @@
         cost: d.budgetWan != null ? +d.budgetWan : 0,
         boxOffice: d.boxOfficeWan != null ? +d.boxOfficeWan : 0,
         rating: d.rating != null ? +d.rating : null,
-        genre: d.country, // 后端无 genre 字段，用 country 兜底
+        genre: d.country,
       };
     });
   }
@@ -370,11 +517,7 @@
       if (genreSet.indexOf(d.genre) === -1) genreSet.push(d.genre);
     });
     var data = list.map(function (d) {
-      return [
-        countrySet.indexOf(d.country),
-        genreSet.indexOf(d.genre),
-        d.avgRating != null ? +d.avgRating : 0,
-      ];
+      return [countrySet.indexOf(d.country), genreSet.indexOf(d.genre), d.avgRating != null ? +d.avgRating : 0];
     });
     return { countries: countrySet, genres: genreSet, data: data };
   }
@@ -393,143 +536,90 @@
     });
   }
 
-  /* ============================================================
-   * 7. 电影列表
-   * ============================================================ */
-  function loadMovieList() {
-    var grid = document.getElementById('movieGrid');
-    if (!grid) return;
-    grid.innerHTML = '<div style="padding:20px;color:#999;">加载中...</div>';
-
-    var params = Object.assign(
-      // 注意：前端 pageState.page 是 1-based（UI 显示用），
-      // 后端 MovieQueryDTO.page 是 0-based（Spring Data PageRequest 约定），
-      // 所以这里要减 1，否则首屏会跳到第 2 页数据
-      { page: pageState.page - 1, size: pageState.size },
-      filterParams()
-    );
-
-    API.get('/api/movies', params).then(function (data) {
-      // Spring Data Page 结构：content 数组 + totalElements
-      var list = data && data.content || [];
-      pageState.total = data && data.totalElements ? data.totalElements : list.length;
-      renderMovieCards(list);
-      updatePageInfo();
-    }).catch(function () {
-      grid.innerHTML = '<div style="padding:20px;color:#e04040;">加载失败，请检查后端</div>';
-    });
-  }
-
-  function renderMovieCards(list) {
-    var grid = document.getElementById('movieGrid');
-    grid.innerHTML = '';
-    if (!list.length) {
-      grid.innerHTML = '<div style="grid-column:1/-1;padding:40px;text-align:center;color:#888;">没有匹配的电影</div>';
-      return;
-    }
-    list.forEach(function (m) {
-      var card = document.createElement('div');
-      card.className = 'movie-card';
-      card.dataset.id = m.id;
-
-      var genresHtml = (m.genres || []).slice(0, 3).join(' / ') || '未知类型';
-      var directorHtml = m.director || '未知导演';
-      var ratingHtml = m.rating != null
-        ? '<span class="movie-rating">★ ' + (+m.rating).toFixed(1) + '</span>'
-        : '';
-
-      card.innerHTML =
-        '<div class="movie-poster">🎬</div>' +
-        '<div class="movie-info">' +
-          '<div class="movie-title">' + (m.title || '未命名') + '</div>' +
-          '<div class="movie-meta">' +
-            (m.year ? (m.year + ' · ') : '') + genresHtml + '<br/>' +
-            '导演：' + directorHtml +
-          '</div>' +
-          ratingHtml +
-        '</div>';
-
-      card.addEventListener('click', function () { openMovieDetail(m.id || m._id); });
-      grid.appendChild(card);
+  /** regionCulture: heatmap 转换结果 → 桑基图所需的扁平数组 */
+  function transformRegionCulture(heatmapData) {
+    if (!heatmapData || !heatmapData.data) return [];
+    var countries = heatmapData.countries || [];
+    var genres = heatmapData.genres || [];
+    return heatmapData.data.map(function (d) {
+      return { country: countries[d[1]], genre: genres[d[0]], avgRating: d[2], count: 1 };
     });
   }
 
   /* ============================================================
-   * 8. 电影详情模态框
+   * 8. A3 作品详情弹窗
    * ============================================================ */
   function openMovieDetail(id) {
-    if (!id) { UI.showToast('该电影缺少 ID', 'warning'); return; }
-    API.get('/api/movies/' + encodeURIComponent(id)).then(function (m) {
-      if (!m) { UI.showToast('未找到该电影', 'warning'); return; }
-      var html = buildDetailHTML(m);
-      UI.showModal(html);
-      // 模态框内同档期对比迷你图（复用 yearTrend 风格的小 bar）
+    if (!id) { UI.showToast('该作品缺少 ID', 'warning'); return; }
+    API.get('/api/works/' + encodeURIComponent(id)).then(function (m) {
+      if (!m) { UI.showToast('未找到该作品', 'warning'); return; }
+      UI.showModal(buildDetailHTML(m));
       setTimeout(function () { renderDetailMiniChart(m); }, 50);
     });
   }
 
   function buildDetailHTML(m) {
     var genres = (m.genres || []).join(' / ') || '-';
-    var cast = (m.cast || m.actors || []).slice(0, 6).join(' / ') || '-';
+    var cast = m.leadActor || m.cast || m.actors || '-';
+    if (Array.isArray(cast)) cast = cast.join(' / ');
+    var fin = m.financial || {};
     return '' +
       '<div class="modal-detail">' +
         '<div class="detail-poster">🎬</div>' +
         '<div class="detail-info">' +
-          '<h3>' + (m.title || '未命名') + '</h3>' +
+          '<h3>' + WorksTable.escapeHtml(m.title || '未命名') + '</h3>' +
           '<p><strong>年份：</strong>' + (m.year || '-') + '</p>' +
-          '<p><strong>导演：</strong>' + (m.director || '-') + '</p>' +
-          '<p><strong>类型：</strong>' + genres + '</p>' +
-          '<p><strong>国家：</strong>' + (m.country || '-') + '</p>' +
-          '<p><strong>评分：</strong>' + (m.rating != null ? (+'m.rating').toFixed(1) : '-') + '</p>' +
-          '<p><strong>成本：</strong>' + (m.cost != null ? m.cost + ' 万' : '-') + '</p>' +
-          '<p><strong>票房：</strong>' + (m.boxOffice != null ? m.boxOffice + ' 万' : '-') + '</p>' +
-          '<p><strong>主演：</strong>' + cast + '</p>' +
+          '<p><strong>导演：</strong>' + WorksTable.escapeHtml(m.director || '-') + '</p>' +
+          '<p><strong>类型：</strong>' + WorksTable.escapeHtml(genres) + '</p>' +
+          '<p><strong>国家/地区：</strong>' + WorksTable.escapeHtml(m.country || '-') + '</p>' +
+          '<p><strong>评分：</strong>' + (m.rating != null ? (+m.rating).toFixed(1) : '-') +
+            '　<strong>评价人数：</strong>' + (m.voteCount != null ? (+m.voteCount).toLocaleString() : '-') + '</p>' +
+          (fin.budgetWan != null ? '<p><strong>成本：</strong>' + fin.budgetWan + ' 万</p>' : '') +
+          (fin.boxOfficeWan != null ? '<p><strong>票房：</strong>' + fin.boxOfficeWan + ' 万</p>' : '') +
+          (fin.seasonTag ? '<p><strong>档期：</strong>' + WorksTable.escapeHtml(fin.seasonTag) + '</p>' : '') +
+          '<p><strong>主演：</strong>' + WorksTable.escapeHtml(cast) + '</p>' +
+          (m.intro ? '<p class="detail-intro">' + WorksTable.escapeHtml(m.intro) + '</p>' : '') +
         '</div>' +
       '</div>' +
       '<div class="detail-mini-chart" id="detailMiniChart"></div>';
   }
 
-  /**
-   * 详情页迷你图：同档期（前后 3 年）电影评分柱状
-   */
+  /** 详情页迷你图：同档期（前后 3 年）电影数量柱状 */
   function renderDetailMiniChart(m) {
     var dom = document.getElementById('detailMiniChart');
     if (!dom || !global.echarts || !m) return;
     var year = m.year;
     if (!year) {
-      dom.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">无年份信息，无法对比</div>';
+      dom.innerHTML = '<div class="table-placeholder">无年份信息，无法对比</div>';
       return;
     }
 
-    var params = { yearStart: year - 3, yearEnd: year + 3 };
-    API.get('/api/stats/year-trend', params).then(function (data) {
-      if (!data || !data.years || !data.years.length) {
-        dom.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">同档期对比数据暂无</div>';
+    API.get('/api/works/stats', { yearStart: year - 3, yearEnd: year + 3 }).then(function (stats) {
+      var data = stats && stats.yearTrend;
+      if (!data || !data.length) {
+        dom.innerHTML = '<div class="table-placeholder">同档期对比数据暂无</div>';
         return;
       }
-      var mini = echarts.init(dom);
-      var colorIdx = data.years.indexOf(String(year));
-      var itemColors = data.years.map(function (y) {
-        return (+y) === +year ? '#42AC4E' : '#bbb';
-      });
-      mini.setOption({
+      var years = data.map(function (d) { return String(d.year); });
+      var counts = data.map(function (d) { return d.count || 0; });
+      var theme = global.UI_THEME ? global.UI_THEME.current() : null;
+      var mini = echarts.init(dom, theme);
+      var itemColors = years.map(function (y) { return (+y) === +year ? '#42AC4E' : '#bbb'; });
+      var base = global.UI_THEME ? global.UI_THEME.baseOption() : {};
+      mini.setOption(Object.assign({}, base, {
         title: { text: '同档期（±3年）电影数量对比', left: 'center', textStyle: { fontSize: 12 } },
         tooltip: { trigger: 'axis' },
         grid: { left: 40, right: 20, top: 30, bottom: 30 },
-        xAxis: { type: 'category', data: data.years, axisLabel: { fontSize: 10 } },
+        xAxis: { type: 'category', data: years, axisLabel: { fontSize: 10 } },
         yAxis: { type: 'value', name: '数量', nameTextStyle: { fontSize: 10 } },
         series: [{
           type: 'bar',
-          data: data.counts.map(function (v, i) {
-            return {
-              value: v,
-              itemStyle: { color: itemColors[i], borderRadius: [3, 3, 0, 0] },
-            };
+          data: counts.map(function (v, i) {
+            return { value: v, itemStyle: { color: itemColors[i], borderRadius: [3, 3, 0, 0] } };
           }),
         }],
-      });
+      }));
 
-      // 监听模态框关闭，销毁迷你实例
       global.addEventListener('modal:close', function handler() {
         mini.dispose();
         global.removeEventListener('modal:close', handler);
@@ -538,85 +628,51 @@
   }
 
   /* ============================================================
-   * 9. 主题切换
+   * 9. 主题切换（只重绘，不重新请求数据）
    * ============================================================ */
   function bindThemeToggle() {
     var btn = document.getElementById('themeToggle');
     if (!btn) return;
     btn.addEventListener('click', function () {
       document.body.classList.toggle('dark');
-      // 销毁所有 ECharts 并以新主题重新 init
-      var theme = document.body.classList.contains('dark') ? 'dark' : null;
-      var chartIds = [
-        'chartYearTrend', 'chartGenreCompare', 'chartScatterCostBox', 'chartHeatmap',
-        'chartSeasonAnalysis', 'chartTopDirectors', 'chartCostBenefit', 'chartRegionCulture',
-      ];
-      var themeInstance = global.echarts;
-      // ECharts 5.x：dispose 后 init 会自动读已存在的主题
-      // 但我们必须重新 init，因为主题是在 init 时指定的
-      // 这里简单做法：直接 dispose 所有 Charts 模块
-      Charts.yearTrend.dispose();
-      Charts.genreCompare.dispose();
-      Charts.scatterCostBox.dispose();
-      Charts.heatmap.dispose();
-      Charts.seasonAnalysis.dispose();
-      Charts.topDirectors.dispose();
-      Charts.costBenefit.dispose();
-      Charts.regionCulture.dispose();
-
-      // 重新执行 reloadAll → 内部 render 函数会用 getTheme()
-      reloadAll();
+      Registry.applyTheme();   // 重新注册主题 → 销毁实例 → 用缓存数据重绘
     });
   }
 
   /* ============================================================
-   * 10. Tab 切换
+   * 10. Tab 切换（懒渲染：切到哪个 Tab 才画哪张图）
    * ============================================================ */
   function bindTabSwitch() {
-    var bar = document.querySelector('.tab-bar');
+    var bar = document.querySelector('.tab-section .tab-bar');
     if (!bar) return;
     bar.addEventListener('click', function (e) {
       var btn = e.target.closest('.tab-btn');
       if (!btn) return;
       var tabId = btn.dataset.tab;
 
-      // 更新按钮状态
       bar.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
 
-      // 更新面板状态
       document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
       var panel = document.getElementById('tab-' + tabId);
       if (panel) panel.classList.add('active');
 
-      // 切到 Tab 后手动 resize 对应的图表（因为隐藏时宽度为 0）
-      setTimeout(function () {
-        if (Charts[tabId] && Charts[tabId].resize) Charts[tabId].resize();
-      }, 50);
+      Registry.activateTab(tabId);
     });
   }
 
   /* ============================================================
-   * 11. Window resize → 所有图表 resize
+   * 11. Window resize → 图表 resize（节流）
    * ============================================================ */
   function bindResize() {
     var resize = UI.throttle(function () {
-      Object.keys(Charts).forEach(function (k) {
-        if (Charts[k].resize) Charts[k].resize();
-      });
+      Registry.resizeAll();
     }, 200);
     global.addEventListener('resize', resize);
   }
 
   /* ============================================================
-   * 12. 模态框关闭事件（main.js 里只做全局绑定，实际关闭逻辑在 ui.js）
-   * ============================================================ */
-  function bindModalClose() {
-    // ui.js 已经绑定了关闭按钮和 ESC / overlay 点击，这里无需再做
-  }
-
-  /* ============================================================
-   * 13. 全局异常兜底
+   * 12. 全局异常兜底
    * ============================================================ */
   function bindGlobalError() {
     global.addEventListener('error', function (e) {

@@ -11,6 +11,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -77,6 +79,21 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result<Void>> handleIllegalArg(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, ex.getMessage()));
+    }
+
+    /**
+     * 处理"接口不存在"（路径写错 / 后端未升级导致新接口缺失）。
+     * <p>
+     * Spring Boot 3 中未匹配的路径会抛 NoResourceFoundException，
+     * 若不单独处理会被兜底分支转成 500，前端就无法区分
+     * "接口不存在"与"服务器内部错误"，这里统一返回 404。
+     * </p>
+     */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<Result<Void>> handleNotFound(Exception ex) {
+        log.warn("接口不存在: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "接口不存在"));
     }
 
     /**

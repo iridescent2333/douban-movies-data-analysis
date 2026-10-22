@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>豆瓣电影数据洞察看板</title>
 
-  <!-- ECharts CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-  <!-- ECharts 主题：默认 light + dark 两套（使用内置 dark 主题） -->
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/theme/dark.min.js"></script>
+  <!-- ECharts 本地化：vendor/echarts.min.js 随仓库分发，离线可用、不受 CDN 屏蔽影响 -->
+  <script src="vendor/echarts.min.js"></script>
+  <!-- 加载器：本地文件缺失时自动回退多个 CDN 镜像；全部失败会广播 echarts:error 给出明确提示 -->
+  <script src="js/echarts-loader.js"></script>
 
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <!-- ========== HEADER ========== -->
+  <!-- ========== F1 标题区 ========== -->
   <header class="app-header">
     <div class="header-left">
       <div class="logo" aria-hidden="true">
@@ -23,7 +23,10 @@
           <text x="16" y="21" text-anchor="middle" font-size="16" fill="#fff" font-family="Arial" font-weight="bold">豆</text>
         </svg>
       </div>
-      <h1 class="app-title">豆瓣电影数据洞察看板</h1>
+      <div class="header-titles">
+        <h1 class="app-title">豆瓣电影数据洞察看板</h1>
+        <span class="app-subtitle">发现优质作品 · 了解评分分布与类型趋势</span>
+      </div>
     </div>
     <div class="header-right">
       <button id="themeToggle" class="theme-toggle" title="切换明暗主题" aria-label="切换明暗主题">
@@ -33,8 +36,18 @@
     </div>
   </header>
 
-  <!-- ========== 全局筛选条 ========== -->
+  <!-- ========== F1 筛选区 ========== -->
   <section class="filter-bar" id="filterBar">
+    <!-- F2 类型筛选：下拉框 -->
+    <div class="filter-group filter-type">
+      <label for="typeSelect">类型</label>
+      <select id="typeSelect">
+        <option value="">全部类型</option>
+        <!-- JS 动态渲染 -->
+      </select>
+    </div>
+
+    <!-- F3 年份区间筛选 -->
     <div class="filter-group filter-year">
       <label>年份</label>
       <div class="range-inputs">
@@ -44,23 +57,17 @@
       </div>
     </div>
 
-    <div class="filter-group filter-genres">
-      <label>类型</label>
-      <div class="checkbox-scroll" id="genreCheckboxes">
-        <!-- JS 动态渲染 -->
-      </div>
-    </div>
-
-    <div class="filter-group filter-country">
-      <label>国家</label>
-      <select id="countrySelect">
-        <option value="">全部</option>
-        <!-- JS 动态渲染 -->
-      </select>
-    </div>
-
+    <!-- F4 评分筛选：快捷区间 + 自定义 -->
     <div class="filter-group filter-rating">
-      <label>评分范围</label>
+      <label>评分区间</label>
+      <div class="rating-chips" id="ratingChips">
+        <button class="chip active" data-min="" data-max="">全部</button>
+        <button class="chip" data-min="9" data-max="">9 分以上</button>
+        <button class="chip" data-min="8" data-max="9">8 – 9 分</button>
+        <button class="chip" data-min="7" data-max="8">7 – 8 分</button>
+        <button class="chip" data-min="6" data-max="7">6 – 7 分</button>
+        <button class="chip" data-min="" data-max="6">6 分以下</button>
+      </div>
       <div class="range-inputs">
         <input type="number" id="ratingMin" min="0" max="10" step="0.1" placeholder="最低" />
         <span>—</span>
@@ -69,7 +76,7 @@
     </div>
 
     <div class="filter-group filter-search">
-      <label>搜索</label>
+      <label for="titleSearch">搜索</label>
       <div class="search-wrap">
         <input type="text" id="titleSearch" placeholder="输入电影标题..." />
       </div>
@@ -80,7 +87,7 @@
     </div>
   </section>
 
-  <!-- ========== KPI 卡片 ========== -->
+  <!-- ========== KPI 卡片（数据概览） ========== -->
   <section class="kpi-section">
     <div class="kpi-grid">
       <div class="kpi-card">
@@ -96,69 +103,139 @@
         <div class="kpi-value" id="kpiYearSpan">-</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">覆盖国家</div>
+        <div class="kpi-label">覆盖国家/地区</div>
         <div class="kpi-value" id="kpiCountries">-</div>
       </div>
     </div>
   </section>
 
-  <!-- ========== 核心图表网格 2x2 ========== -->
+  <!-- ========== F1 图表展示区：核心图表（F5-F8） ========== -->
   <section class="core-charts">
+    <div class="section-heading">
+      <h2>核心洞察</h2>
+      <span class="section-hint">评分分布 · 年度趋势 · 热门作品 · 类型对比</span>
+    </div>
     <div class="chart-grid chart-grid-2x2">
+      <!-- F5 评分分布直方图 -->
       <div class="chart-card">
         <div class="chart-header">
-          <span class="chart-title">年代趋势</span>
+          <span class="chart-title">F5 评分分布直方图</span>
+          <span class="chart-subtitle">各评分段电影数量</span>
+        </div>
+        <div class="chart-body" id="chartRatingDistribution"></div>
+      </div>
+
+      <!-- F6 年度趋势折线图 -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">F6 年度趋势</span>
+          <span class="chart-subtitle">平均评分 / 数量随年份变化</span>
         </div>
         <div class="chart-body" id="chartYearTrend"></div>
       </div>
 
+      <!-- F7 热门 TOP10 -->
       <div class="chart-card">
         <div class="chart-header">
-          <span class="chart-title">类型评分 vs 票房对比</span>
+          <span class="chart-title">F7 热门 TOP 10</span>
+          <div class="chart-toggle" id="topWorksToggle">
+            <button class="toggle-btn active" data-by="rating">按评分</button>
+            <button class="toggle-btn" data-by="votes">按评价人数</button>
+          </div>
+        </div>
+        <div class="chart-body" id="chartTopWorks"></div>
+      </div>
+
+      <!-- F8 类型对比：雷达图 / 柱状图 -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">F8 类型对比</span>
+          <div class="chart-toggle" id="genreCompareToggle">
+            <button class="toggle-btn active" data-mode="bar">柱状图</button>
+            <button class="toggle-btn" data-mode="radar">雷达图</button>
+          </div>
         </div>
         <div class="chart-body" id="chartGenreCompare"></div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-header">
-          <span class="chart-title">成本-票房散点（气泡=评分）</span>
-        </div>
-        <div class="chart-body" id="chartScatterCostBox"></div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-header">
-          <span class="chart-title">地区 × 类型 热力矩阵</span>
-        </div>
-        <div class="chart-body" id="chartHeatmap"></div>
       </div>
     </div>
   </section>
 
-  <!-- ========== Tab 切换面板 ========== -->
-  <section class="tab-section">
-    <div class="tab-bar">
-      <button class="tab-btn active" data-tab="seasonAnalysis">档期分析</button>
-      <button class="tab-btn" data-tab="topDirectors">人才图谱</button>
-      <button class="tab-btn" data-tab="costBenefit">成本效益</button>
-      <button class="tab-btn" data-tab="regionCulture">地域文化</button>
-    </div>
-
-    <div class="tab-panel active" id="tab-seasonAnalysis">
-      <div class="chart-card">
-        <div class="chart-header"><span class="chart-title">档期分析（气泡=票房，颜色=评分）</span></div>
-        <div class="chart-body" id="chartSeasonAnalysis"></div>
+  <!-- ========== F9 作品详情表格 ========== -->
+  <section class="works-table-section">
+    <div class="section-heading">
+      <h2>F9 作品列表</h2>
+      <div class="section-actions">
+        <div class="chart-toggle" id="viewToggle">
+          <button class="toggle-btn active" data-view="table">表格</button>
+          <button class="toggle-btn" data-view="card">卡片</button>
+        </div>
       </div>
     </div>
 
-    <div class="tab-panel" id="tab-topDirectors">
+    <!-- 表格视图 -->
+    <div class="table-wrap" id="worksTableWrap">
+      <table class="works-table" id="worksTable">
+        <thead>
+          <tr>
+            <th class="col-id">ID</th>
+            <th class="col-title">标题</th>
+            <th class="col-director">导演</th>
+            <th class="col-genres">类型</th>
+            <th class="col-rating">评分</th>
+            <th class="col-votes">评价人数</th>
+            <th class="col-year">年份</th>
+          </tr>
+        </thead>
+        <tbody id="worksTableBody"></tbody>
+      </table>
+      <div class="table-placeholder" id="tablePlaceholder" hidden>加载中...</div>
+    </div>
+
+    <!-- 卡片视图 -->
+    <div class="movie-grid" id="movieGrid" hidden></div>
+
+    <div class="table-pager">
+      <button id="prevPage" class="page-btn">上一页</button>
+      <span id="pageInfo">1 / 1</span>
+      <button id="nextPage" class="page-btn">下一页</button>
+      <span class="page-size">每页 10 条</span>
+    </div>
+  </section>
+
+  <!-- ========== 深度分析（拓展图表） ========== -->
+  <section class="deep-charts">
+    <div class="section-heading">
+      <h2>深度分析</h2>
+      <span class="section-hint">投入产出 · 地域文化 · 档期与人才</span>
+    </div>
+    <div class="chart-grid chart-grid-2x2">
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">成本-票房散点（气泡=评分）</span></div>
+        <div class="chart-body" id="chartScatterCostBox"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">地区 × 类型 热力矩阵</span></div>
+        <div class="chart-body" id="chartHeatmap"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">档期 × 类型 分析（气泡=票房，颜色=评分）</span></div>
+        <div class="chart-body" id="chartSeasonAnalysis"></div>
+      </div>
       <div class="chart-card">
         <div class="chart-header"><span class="chart-title">导演 TOP N 作品数 & 平均评分</span></div>
         <div class="chart-body" id="chartTopDirectors"></div>
       </div>
     </div>
+  </section>
 
-    <div class="tab-panel" id="tab-costBenefit">
+  <!-- ========== Tab 切换面板（产业链视角） ========== -->
+  <section class="tab-section">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="costBenefit">成本效益</button>
+      <button class="tab-btn" data-tab="regionCulture">地域文化</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-costBenefit">
       <div class="chart-card">
         <div class="chart-header"><span class="chart-title">成本区间 × ROI × 评分</span></div>
         <div class="chart-body" id="chartCostBenefit"></div>
@@ -170,21 +247,6 @@
         <div class="chart-header"><span class="chart-title">国家 → 类型 → 评分段 桑基图</span></div>
         <div class="chart-body" id="chartRegionCulture"></div>
       </div>
-    </div>
-  </section>
-
-  <!-- ========== 电影列表网格 ========== -->
-  <section class="movie-list-section">
-    <div class="section-header">
-      <h2>电影列表</h2>
-      <div class="pager">
-        <button id="prevPage" class="page-btn">上一页</button>
-        <span id="pageInfo">1 / 1</span>
-        <button id="nextPage" class="page-btn">下一页</button>
-      </div>
-    </div>
-    <div class="movie-grid" id="movieGrid">
-      <!-- JS 动态渲染 -->
     </div>
   </section>
 
@@ -206,11 +268,19 @@
 
   <!-- ========== JS 文件（按依赖顺序加载） ========== -->
   <script src="js/config.js"></script>
+  <!-- 设计令牌：页面 CSS 变量与 ECharts 主题同源，UI 调优只改 theme.js -->
+  <script src="js/theme.js"></script>
+  <!-- 图表声明表：新增图表在这里加一行 -->
+  <script src="js/chart-config.js"></script>
   <script src="js/utils/debounce.js"></script>
   <script src="js/utils/api.js"></script>
   <script src="js/utils/ui.js"></script>
+  <!-- 图表注册中心：统一 init/render/resize/dispose/懒渲染/错误态 -->
+  <script src="js/charts/registry.js"></script>
 
+  <script src="js/charts/ratingDistribution.js"></script>
   <script src="js/charts/yearTrend.js"></script>
+  <script src="js/charts/topWorks.js"></script>
   <script src="js/charts/genreCompare.js"></script>
   <script src="js/charts/scatterCostBox.js"></script>
   <script src="js/charts/heatmap.js"></script>
@@ -219,6 +289,7 @@
   <script src="js/charts/costBenefit.js"></script>
   <script src="js/charts/regionCulture.js"></script>
 
+  <script src="js/works-table.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
