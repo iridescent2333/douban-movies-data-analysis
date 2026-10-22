@@ -152,27 +152,31 @@ GET /api/works?type=科幻&yearStart=2015&yearEnd=2025&ratingMin=8&title=星际&
 | ratingMax | BigDecimal | ❌ | 最高评分（含） |
 | title | String | ❌ | 标题模糊匹配 |
 
-**响应**（Spring Data Page）
+**响应**（课程要求分页格式：page / size / total / records）
 
 ```json
 {
   "code": 0,
-  "message": "ok",
+  "msg": "ok",
   "data": {
-    "content": [
+    "page": 0, "size": 10, "total": 2050,
+    "records": [
       {
-        "id": 3080, "title": "冷酷的谎言往事", "director": "Satyajit Ray",
-        "leadActor": "Hrithik Roshan; Scarlett Johansson", "country": "德国",
-        "year": 2016, "duration": 123, "rating": 9.8, "voteCount": 38616,
-        "posterUrl": "", "intro": "当和平时期来临，一位退休的老兵必须面对人性深处的挣扎……",
-        "genres": ["动画", "Cult", "文艺"]
+        "id": 1292052, "title": "肖申克的救赎", "director": "弗兰克·德拉邦特",
+        "leadActor": "蒂姆·罗宾斯 ; 摩根·弗里曼", "country": "美国",
+        "year": 1994, "duration": 142, "rating": 9.7, "voteCount": 3225431,
+        "releaseDate": "1994-09-10", "seasonTag": "秋季档",
+        "posterUrl": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p480747492.webp",
+        "intro": "一场谋杀案使银行家安迪（蒂姆·罗宾斯 饰）蒙冤入狱……",
+        "link": "https://movie.douban.com/subject/1292052/",
+        "genres": ["剧情", "犯罪"]
       }
-    ],
-    "totalElements": 850, "totalPages": 85, "number": 0, "size": 10,
-    "first": true, "last": false, "empty": false
+    ]
   }
 }
 ```
+
+> `id` 直接使用豆瓣条目 subject id，可溯源；全部字段来自真实豆瓣数据。
 
 ### 4.3 A3 作品详情
 
@@ -184,17 +188,34 @@ GET /api/works/3080
 
 ```json
 {
-  "code": 0, "message": "ok",
+  "code": 0, "msg": "ok",
   "data": {
-    "id": 3080, "title": "冷酷的谎言往事", "genres": ["动画", "Cult", "文艺"],
-    "rating": 9.8, "voteCount": 38616, "year": 2016, "country": "德国",
-    "intro": "当和平时期来临……",
-    "financial": { "budgetWan": null, "boxOfficeWan": null, "releaseDate": "2016-08-28", "seasonTag": "暑期档" }
+    "id": 1292052, "title": "肖申克的救赎", "genres": ["剧情", "犯罪"],
+    "rating": 9.7, "voteCount": 3225431, "year": 1994, "country": "美国",
+    "duration": 142, "releaseDate": "1994-09-10", "seasonTag": "秋季档",
+    "intro": "一场谋杀案使银行家安迪（蒂姆·罗宾斯 饰）蒙冤入狱……",
+    "posterUrl": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p480747492.webp",
+    "link": "https://movie.douban.com/subject/1292052/"
   }
 }
 ```
 
 > 不存在的 id 返回 `{"code":404,...}`（HTTP 404）。
+
+### 4.6 海报图片代理（防盗链解决方案）
+
+```
+GET /api/works/{id}/poster?size=small|large
+```
+
+**背景**：豆瓣海报 CDN（img*.doubanio.com）校验 Referer——实测只有携带
+`Referer: https://movie.douban.com/` 才返回 200，浏览器禁止页面伪造 Referer，
+前端 `<img>` 直连豆瓣 URL 必然 418。
+
+**方案**：后端代理——服务端携带豆瓣 Referer 拉取图片字节流，MD5 为 key 落盘缓存
+（海报不变，永久有效），前端同源引用；仅白名单 `img*.doubanio.com`，防 SSRF。
+`size=small` 返回缩略图（榜单/表格），`size=large` 返回大图（详情弹窗）。
+响应带 `Cache-Control: max-age=604800`，浏览器二次访问直接走本地缓存。
 
 ### 4.4 A4 统计数据（评分分布 + 年度趋势 + 类型对比）
 
