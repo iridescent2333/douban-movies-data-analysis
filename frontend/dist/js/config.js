@@ -4,7 +4,7 @@
  */
 window.APP_CONFIG = {
   /** 后端 API 基础地址 */
-  API_BASE: '',            // 走 Nginx 反向代理 /api → localhost:8080/api
+  API_BASE: '',            // 空串：走 Nginx 同源反向代理 /api → localhost:8081/api
 
   /** 筛选输入防抖时间（毫秒） */
   DEBOUNCE_MS: 300,
