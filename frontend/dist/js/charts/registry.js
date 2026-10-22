@@ -23,6 +23,7 @@
   var renderedKeys = {};      // 已成功渲染过的图表
   var activeTab = null;      // 当前激活的 Tab id
   var frameHandle = null;    // requestAnimationFrame 句柄
+  var visibilityObserved = {};  // 已建立视口监听的图表
 
   /* ---------------- 基础工具 ---------------- */
 
@@ -48,7 +49,41 @@
   }
 
   function isLazy(def) {
-    return def.lazy === true || !!def.tab;
+    // tab：切到对应 Tab 才画；'visibility'：滚动进入视口才画
+    return def.lazy === true || def.lazy === 'visibility' || !!def.tab;
+  }
+
+  function isVisibilityLazy(def) {
+    return def.lazy === 'visibility' && !def.tab;
+  }
+
+  /**
+   * 为「滚动懒渲染」的图表建立 IntersectionObserver：
+   * 容器进入视口时自动绘制一次，之后再次进入不再重绘。
+   */
+  function observeVisibilityCharts() {
+    if (!global.IntersectionObserver) {
+      // 老浏览器不支持 → 退化为立即渲染
+      defs.filter(isVisibilityLazy).forEach(function (def) {
+        if (lastPayload) renderOne(def, lastPayload);
+      });
+      return;
+    }
+    defs.filter(isVisibilityLazy).forEach(function (def) {
+      if (visibilityObserved[def.key]) return;
+      var el = containerOf(def);
+      if (!el) return;
+      visibilityObserved[def.key] = true;
+      var observer = new global.IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            if (lastPayload) renderOne(def, lastPayload);
+            observer.disconnect();   // 只画一次
+          }
+        });
+      }, { rootMargin: '120px 0px' });   // 提前 120px 开始画，滚动更顺滑
+      observer.observe(el);
+    });
   }
 
   /** 是否处于可见容器中（隐藏容器 width=0，绘制会得到空图） */
@@ -128,6 +163,7 @@
         renderOne(def, lastPayload);
       });
       renderActiveTabCharts();
+      observeVisibilityCharts();   // 深度分析区：滚动进入视口再画
     });
   }
 
@@ -182,14 +218,40 @@
   }
 
   /**
-   * 主题切换：重新注册主题 → 销毁实例 → 用缓存数据重绘（不重新请求接口）
+   * 主题切换：重新注册主题 → 销毁实例 → 用缓存数据重绘（不重新请求接口）。
+   * 注意：视口懒渲染的图表如果此前已经画过，也要一起重绘，
+   * 否则切完主题这些区域会空白，直到用户再次滚动才恢复。
    */
   function applyTheme() {
     if (global.UI_THEME && global.UI_THEME.registerEChartsThemes) {
       global.UI_THEME.registerEChartsThemes();
     }
+    var wasRendered = {};
+    defs.forEach(function (def) { if (renderedKeys[def.key]) wasRendered[def.key] = true; });
+
     disposeAll();
-    renderAll(null);   // 传 null 表示沿用 lastPayload
+
+    if (frameHandle) {
+      global.cancelAnimationFrame(frameHandle);
+      frameHandle = null;
+    }
+    frameHandle = global.requestAnimationFrame(function () {
+      frameHandle = null;
+      // 1. 非懒渲染图表（核心区 F5-F8）
+      defs.forEach(function (def) {
+        if (isLazy(def)) return;
+        if (!isVisible(def)) return;
+        renderOne(def, lastPayload);
+      });
+      // 2. 当前激活 Tab 的图表
+      renderActiveTabCharts();
+      // 3. 此前已画过的视口懒渲染图表（深度分析区）
+      defs.filter(isVisibilityLazy).forEach(function (def) {
+        if (wasRendered[def.key]) renderOne(def, lastPayload);
+      });
+      // 4. 还没画过的继续等滚动
+      observeVisibilityCharts();
+    });
   }
 
   /** 供外部查询状态 */

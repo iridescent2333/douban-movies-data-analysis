@@ -1,6 +1,10 @@
 /**
- * yearTrend.js —— 图-1 年代趋势（双 Y 轴：柱=数量，折线=平均分）
+ * yearTrend.js —— F6 年度趋势折线图
  * 数据格式期望：{ years: ['1990','1991',...], counts: [..], avgRatings: [..] }
+ *
+ * 课程要求 F6：「年度趋势折线图，展示各类型或总体平均评分随年份变化」，
+ * 因此折线（平均评分）为主视觉、柱状（电影数量）为辅助背景，
+ * 点击柱子可按该年份联动筛选。
  */
 (function (global) {
   'use strict';
@@ -35,7 +39,7 @@
 
     var option = {
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-      legend: { data: ['电影数量', '平均评分'], top: 4 },
+      legend: { data: ['平均评分', '电影数量'], top: 4 },
       grid: { left: 50, right: 50, top: 40, bottom: 40 },
       xAxis: {
         type: 'category',
@@ -45,41 +49,46 @@
       yAxis: [
         {
           type: 'value',
-          name: '数量',
-          nameTextStyle: { padding: [0, 0, 0, -20] },
-          position: 'left',
-        },
-        {
-          type: 'value',
           name: '评分',
           min: 0, max: 10,
           position: 'right',
           axisLabel: { formatter: '{value}' },
         },
+        {
+          type: 'value',
+          name: '数量',
+          position: 'left',
+        },
       ],
       series: [
         {
-          name: '电影数量',
-          type: 'bar',
-          data: data.counts,
-          itemStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#42AC4E' },
-              { offset: 1, color: '#7dd888' },
-            ]),
-            borderRadius: [4, 4, 0, 0],
-          },
-        },
-        {
           name: '平均评分',
           type: 'line',
-          yAxisIndex: 1,
+          yAxisIndex: 0,
           data: data.avgRatings,
           smooth: true,
           symbol: 'circle',
-          symbolSize: 6,
+          symbolSize: 7,
           itemStyle: { color: '#f0a020' },
-          lineStyle: { width: 2 },
+          lineStyle: { width: 3 },
+          areaStyle: { opacity: 0.10 },
+          // 评分是主线：置顶绘制，避免被柱状遮住
+          z: 3,
+        },
+        {
+          name: '电影数量',
+          type: 'bar',
+          yAxisIndex: 1,
+          data: data.counts,
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(66,172,78,0.85)' },
+              { offset: 1, color: 'rgba(66,172,78,0.15)' },
+            ]),
+            borderRadius: [4, 4, 0, 0],
+          },
+          barMaxWidth: 18,
+          z: 1,
         },
       ],
     };
