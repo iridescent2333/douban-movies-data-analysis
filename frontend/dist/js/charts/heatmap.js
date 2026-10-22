@@ -35,9 +35,9 @@
 
     // ECharts heatmap 数据格式：[xIndex, yIndex, value]
     // x 轴放 genre，y 轴放 country（符合"地区×类型"的阅读习惯）
+    // 第 4 维是该格的影片数量，用于 tooltip 展示
     var heatData = (data.data || []).map(function (d) {
-      // 原数据假设 [countryIdx, genreIdx, rating]，需交换 x/y
-      return [d[1], d[0], d[2]];
+      return [d[1], d[0], d[2], d[3]];
     });
 
     var option = {
@@ -47,32 +47,36 @@
           var c = data.countries[p.value[1]];
           var g = data.genres[p.value[0]];
           var v = p.value[2];
-          return '<b>' + c + ' · ' + g + '</b><br/>平均评分：' + (v != null ? v.toFixed(2) : '-');
+          return '<b>' + c + ' · ' + g + '</b><br/>平均评分：' + (v != null ? v.toFixed(2) : '-')
+            + (p.value[3] != null ? '<br/>影片数：' + p.value[3] + ' 部' : '');
         },
       },
-      grid: { left: 90, right: 60, top: 20, bottom: 60 },
+      grid: { left: 110, right: 70, top: 24, bottom: 72 },
       xAxis: {
         type: 'category',
         data: data.genres,
         splitArea: { show: true },
-        axisLabel: { rotate: 45, fontSize: 11 },
+        axisLabel: { rotate: 35, fontSize: 12 },
       },
       yAxis: {
         type: 'category',
         data: data.countries,
         splitArea: { show: true },
+        axisLabel: { fontSize: 12 },
       },
       visualMap: {
-        min: 0,
-        max: 10,
+        min: 6,
+        max: 9.5,
         calculable: true,
         orient: 'vertical',
         right: 10,
         top: 'center',
         inRange: {
-          color: ['#2d6e35', '#fb7299', '#ffb3cd', '#c8e6a0', '#f0e890', '#f0a020', '#e04040'],
+          // 低分青蓝 → 中分米白 → 高分橙红，比杂色带更易读
+          color: ['#5b8ff9', '#9ec2ff', '#f6f0c8', '#f6bd6a', '#e8684a', '#d7263d'],
         },
         textStyle: { fontSize: 11 },
+        text: ['高分', '低分'],
       },
       series: [{
         name: '平均评分',
@@ -80,7 +84,7 @@
         data: heatData,
         label: {
           show: true,
-          fontSize: 10,
+          fontSize: 11,
           formatter: function (p) {
             return p.value[2] != null ? p.value[2].toFixed(1) : '';
           },

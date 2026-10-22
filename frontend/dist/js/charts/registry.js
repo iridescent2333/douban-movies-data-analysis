@@ -127,9 +127,11 @@
     }
     frameHandle = global.requestAnimationFrame(function () {
       frameHandle = null;
-      defsOfPage(lastPage).forEach(function (def) {
-        if (isLazy(def)) return;              // 懒渲染图表交给视口监听
+      defsOfPage(lastPage).filter(renderable).forEach(function (def) {
         if (!isVisible(def)) return;          // 容器不可见时跳过，避免画成 0 宽
+        if (isLazy(def) && !renderedKeys[def.key]) return;  // 懒渲染且从未画过 → 交给视口监听
+        // 已渲染过的懒图表在数据变化（筛选条件改变）时必须重绘，
+        // 否则首次滚入视口后 observer 已 disconnect，图表永远停留在旧数据
         renderOne(def, lastPayload);
       });
       observeVisibilityCharts();

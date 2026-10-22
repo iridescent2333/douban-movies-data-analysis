@@ -81,6 +81,7 @@
     bindRankToggles();
     bindWorksListEvents();
     bindGlobalSearch();
+    bindChartClickFilters();
 
     if (global.UI_THEME) global.UI_THEME.registerEChartsThemes();
 
@@ -280,7 +281,10 @@
   /** 分地区页：地区 chips */
   function initRegionPage() {
     API.getWithCache('/api/movies/filters', null).then(function (data) {
-      var countries = (data && data.countries) || [];
+      // 后端返回 10 个核心地区；失败时回退到前端常量，保证分地区热榜标签恒为 10 个
+      var countries = (data && data.countries && data.countries.length)
+        ? data.countries
+        : (CONFIG.CORE_REGIONS || []);
       var bar = document.getElementById('regionChips');
       bar.innerHTML = '';
       var all = document.createElement('button');
@@ -307,16 +311,16 @@
     }).catch(onLoadError);
   }
 
-  /** 分年代页：年代 chips（5 年一档，数据跨度 1995-2025） */
+  /** 分年代页：年代 chips（数据真实跨度 1931-2026，按十年一档） */
   function initEraPage() {
     var eras = [
       { label: '全部年代', start: null, end: null },
-      { label: '1995-1999', start: 1995, end: 1999 },
-      { label: '2000-2004', start: 2000, end: 2004 },
-      { label: '2005-2009', start: 2005, end: 2009 },
-      { label: '2010-2014', start: 2010, end: 2014 },
-      { label: '2015-2019', start: 2015, end: 2019 },
-      { label: '2020-2025', start: 2020, end: 2025 },
+      { label: '1980 以前', start: null, end: 1979 },
+      { label: '1980-1989', start: 1980, end: 1989 },
+      { label: '1990-1999', start: 1990, end: 1999 },
+      { label: '2000-2009', start: 2000, end: 2009 },
+      { label: '2010-2019', start: 2010, end: 2019 },
+      { label: '2020 至今', start: 2020, end: null },
     ];
     var bar = document.getElementById('eraChips');
     bar.innerHTML = '';
@@ -416,7 +420,9 @@
     if (typeSel) typeSel.addEventListener('change', trigger);
 
     // ---- F1 首页左侧筛选面板（与影片库共用 filterState，双向同步） ----
-    ['homeYearStart', 'homeYearEnd', 'ratingMin', 'ratingMax'].forEach(function (id) {
+    // 注意：首页评分输入框的 id 是 homeRatingMin/homeRatingMax（与影片库的 ratingMin/ratingMax 区分，
+    // 重复 id 会让 getElementById 永远只命中第一个，导致影片库评分筛选"无效"）
+    ['homeYearStart', 'homeYearEnd', 'homeRatingMin', 'homeRatingMax'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('input', trigger);
     });
@@ -428,13 +434,15 @@
     if (preset) {
       preset.addEventListener('change', function () {
         var v = preset.value;
+        var lo = document.getElementById('homeRatingMin');
+        var hi = document.getElementById('homeRatingMax');
         if (v) {
           var parts = v.split('-');
-          document.getElementById('ratingMin').value = parts[0] === '0' ? '' : parts[0];
-          document.getElementById('ratingMax').value = parts[1] === '10' ? '' : parts[1];
+          if (lo) lo.value = parts[0] === '0' ? '' : parts[0];
+          if (hi) hi.value = parts[1] === '10' ? '' : parts[1];
         } else {
-          document.getElementById('ratingMin').value = '';
-          document.getElementById('ratingMax').value = '';
+          if (lo) lo.value = '';
+          if (hi) hi.value = '';
         }
         trigger();
       });
@@ -482,8 +490,8 @@
       type: pickValue('typeSelect', 'homeTypeSelect'),
       yearStart: pickNumber('yearStart', 'homeYearStart'),
       yearEnd: pickNumber('yearEnd', 'homeYearEnd'),
-      ratingMin: pickNumber('ratingMin', null),
-      ratingMax: pickNumber('ratingMax', null),
+      ratingMin: pickNumber('ratingMin', 'homeRatingMin'),
+      ratingMax: pickNumber('ratingMax', 'homeRatingMax'),
       title: pickValue('titleSearch', null),
     };
     // 把状态同步回另一处的控件，避免两面板显示不一致
@@ -515,6 +523,8 @@
     var mapping = {
       yearStart: filterState.yearStart, yearEnd: filterState.yearEnd,
       ratingMin: filterState.ratingMin, ratingMax: filterState.ratingMax,
+      homeYearStart: filterState.yearStart, homeYearEnd: filterState.yearEnd,
+      homeRatingMin: filterState.ratingMin, homeRatingMax: filterState.ratingMax,
     };
     Object.keys(mapping).forEach(function (id) {
       var el = document.getElementById(id);
@@ -536,7 +546,8 @@
 
   /** 清空两处筛选控件 */
   function resetFilterInputs() {
-    ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax', 'homeYearStart', 'homeYearEnd', 'titleSearch']
+    ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax',
+     'homeYearStart', 'homeYearEnd', 'homeRatingMin', 'homeRatingMax', 'titleSearch']
       .forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.value = '';
@@ -629,7 +640,34 @@
   }
 
   /* ============================================================
-   * 6. 顶栏搜索 → 跳转影片库并按标题筛选
+   * 6.1 图表点击联动筛选（F5 直方图点柱 / F8 类型对比点柱）
+   * ============================================================ */
+  function bindChartClickFilters() {
+    // F5：点击评分段柱体 → 写入评分区间筛选（"9.5+" 段的 max 为空，按 10 处理）
+    global.addEventListener('filter:ratingClick', function (e) {
+      var d = (e && e.detail) || {};
+      if (d.min == null) return;
+      filterState.ratingMin = d.min;
+      filterState.ratingMax = (d.max != null && d.max <= 10) ? d.max : 10;
+      syncFilterInputs();
+      pageState.page = 1;
+      refreshAll();
+      UI.showToast('已按评分段 ' + (d.range || (d.min + '-' + d.max)) + ' 筛选', 'success');
+    });
+    // F8：点击类型柱/雷达 → 写入类型筛选
+    global.addEventListener('filter:genreClick', function (e) {
+      var d = (e && e.detail) || {};
+      if (!d.genre) return;
+      filterState.type = d.genre;
+      syncFilterInputs();
+      pageState.page = 1;
+      refreshAll();
+      UI.showToast('已按类型「' + d.genre + '」筛选', 'success');
+    });
+  }
+
+  /* ============================================================
+   * 6.2 顶栏搜索 → 跳转影片库并按标题筛选
    * ============================================================ */
   function bindGlobalSearch() {
     var input = document.getElementById('globalSearch');
@@ -735,29 +773,43 @@
 
   function transformScatter(list) {
     if (!list || !list.length) return [];
-    // 评分 × 热度散点（公开数据集无真实票房，改用两个真实维度）
+    // 评分 × 热度散点（公开数据集无真实票房，改用两个真实维度）。
+    // ScatterPointDTO 字段：id/title/rating/voteCount/country(主地区)/genre(主类型)
     return list.map(function (d) {
       return {
-        movie: d.title, title: d.title,
         id: d.id,
+        title: d.title,
         rating: d.rating != null ? +d.rating : 0,
         votes: d.voteCount != null ? +d.voteCount : 0,
-        genre: d.country,
+        country: d.country,   // 主地区：用于图例分组着色
+        genre: d.genre,       // 主类型：保留以备扩展
       };
     });
   }
 
   function transformHeatmap(list) {
     if (!list || !list.length) return { countries: [], genres: [], data: [] };
-    var countrySet = [], genreSet = [];
+    // 课程要求：横轴固定为 12 个核心类型、纵轴固定为 10 个核心地区，
+    // 不再按数量动态裁剪（避免轴漂移、矩阵不整齐）。后端已归并为主类型/主地区，
+    // 这里只把落在核心字典内的格子放进矩阵，其余（极少数纯非核心产地）丢弃。
+    var CORE_REGIONS = (CONFIG && CONFIG.CORE_REGIONS) || [];
+    var CORE_TYPES = (CONFIG && CONFIG.CORE_TYPES) || [];
+    var regionIdx = {}, typeIdx = {};
+    CORE_REGIONS.forEach(function (r, i) { regionIdx[r] = i; });
+    CORE_TYPES.forEach(function (t, i) { typeIdx[t] = i; });
+
+    var data = [];
     list.forEach(function (d) {
-      if (countrySet.indexOf(d.country) === -1) countrySet.push(d.country);
-      if (genreSet.indexOf(d.genre) === -1) genreSet.push(d.genre);
+      var ri = regionIdx[d.country];
+      var gi = typeIdx[d.genre];
+      if (ri === undefined || gi === undefined) return;   // 非核心地区/类型跳过
+      data.push([gi, ri, d.avgRating != null ? +d.avgRating : 0, d.count || 0]);
     });
-    var data = list.map(function (d) {
-      return [countrySet.indexOf(d.country), genreSet.indexOf(d.genre), d.avgRating != null ? +d.avgRating : 0];
-    });
-    return { countries: countrySet, genres: genreSet, data: data };
+    return {
+      countries: CORE_REGIONS.slice(),
+      genres: CORE_TYPES.slice(),
+      data: data,
+    };
   }
 
   function transformSeason(list) {

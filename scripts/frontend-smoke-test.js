@@ -199,15 +199,17 @@ setTimeout(() => {
   const homeCount = (global.__charts || []).length - beforeHome;
   check(homeCount === 2, `首页只渲染 2 张图（实际 ${homeCount} 张：评分分布 + 年度趋势）`);
 
-  // 切到深度分析页：4 张懒渲染图等滚动
+  // 切到深度分析页：scatter/heatmap 进入即渲染（修复首屏空白），season/topDirectors 仍懒渲染等滚动
   const beforeDeep = (global.__charts || []).length;
+  const obsBefore = observers.length;
   ChartRegistry.renderAll(payload, 'insight-deep');
   setTimeout(() => {
-    check((global.__charts || []).length - beforeDeep === 0, '深度分析页未滚动不渲染');
-    check(observers.length === 4, `4 张图已建立视口监听（实际 ${observers.length} 个）`);
+    const immediate = (global.__charts || []).length - beforeDeep;
+    check(immediate === 2, `深度分析页打开即渲染 scatter/heatmap 2 张（实际 ${immediate} 张，避免空白）`);
+    check(observers.length - obsBefore === 2, `season/topDirectors 2 张图已建立视口监听（实际 ${observers.length - obsBefore} 个）`);
     observers.forEach(o => o.trigger());
     const deepCount = (global.__charts || []).length - beforeDeep;
-    check(deepCount === 4, `滚动后渲染 4 张深度分析图（实际 ${deepCount} 张）`);
+    check(deepCount === 4, `懒渲染触发后共 4 张深度分析图（实际 ${deepCount} 张）`);
 
     // 主题切换：只重绘当前页（深度分析 4 张），其它页不碰
     const beforeTheme = (global.__charts || []).length;

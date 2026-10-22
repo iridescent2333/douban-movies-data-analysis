@@ -1,5 +1,6 @@
 package com.movie.dashboard.service;
 
+import com.movie.dashboard.Constants;
 import com.movie.dashboard.dto.*;
 import com.movie.dashboard.entity.Genre;
 import com.movie.dashboard.entity.Movie;
@@ -94,14 +95,17 @@ public class MovieService {
 
     /**
      * 聚合所有筛选器下拉：年份 / 国家 / 类型。
+     * <p>
+     * 国家与类型返回全站统一的「核心」列表（见 {@link Constants#CORE_REGIONS} /
+     * {@link Constants#CORE_GENRES}），顺序固定，保证筛选器、分地区/分类型热榜、
+     * 类型对比图表、深度分析热力矩阵口径完全一致，且不随数据库内容膨胀出冗余选项。
+     * 年份仍来自数据库（覆盖真实数据跨度）。
+     * </p>
      */
     @Transactional(readOnly = true)
     public FilterOptionsDTO getFilterOptions() {
         List<Integer> years = movieRepository.findDistinctYears();
-        List<String> countries = movieRepository.findDistinctCountries();
-        List<String> genres = genreRepository.findAll().stream()
-                .map(Genre::getName).sorted().collect(Collectors.toList());
-        return new FilterOptionsDTO(years, countries, genres);
+        return new FilterOptionsDTO(years, Constants.CORE_REGIONS, Constants.CORE_GENRES);
     }
 
     // ---------- 转换 ----------

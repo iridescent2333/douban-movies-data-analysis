@@ -29,10 +29,11 @@ public class StatsController {
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,
+            @RequestParam(required = false) String type,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) BigDecimal ratingMin,
             @RequestParam(required = false) BigDecimal ratingMax) {
-        MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
+        MovieQueryDTO q = buildQuery(yearStart, yearEnd, mergeType(genres, type), country, ratingMin, ratingMax);
         return Result.ok(statsService.yearTrend(q));
     }
 
@@ -42,10 +43,11 @@ public class StatsController {
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,
+            @RequestParam(required = false) String type,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) BigDecimal ratingMin,
             @RequestParam(required = false) BigDecimal ratingMax) {
-        MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
+        MovieQueryDTO q = buildQuery(yearStart, yearEnd, mergeType(genres, type), country, ratingMin, ratingMax);
         return Result.ok(statsService.genreCompare(q));
     }
 
@@ -55,10 +57,11 @@ public class StatsController {
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,
+            @RequestParam(required = false) String type,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) BigDecimal ratingMin,
             @RequestParam(required = false) BigDecimal ratingMax) {
-        MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
+        MovieQueryDTO q = buildQuery(yearStart, yearEnd, mergeType(genres, type), country, ratingMin, ratingMax);
         return Result.ok(statsService.ratingVotesScatter(q));
     }
 
@@ -68,10 +71,11 @@ public class StatsController {
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,
+            @RequestParam(required = false) String type,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) BigDecimal ratingMin,
             @RequestParam(required = false) BigDecimal ratingMax) {
-        MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
+        MovieQueryDTO q = buildQuery(yearStart, yearEnd, mergeType(genres, type), country, ratingMin, ratingMax);
         return Result.ok(statsService.heatmap(q));
     }
 
@@ -81,10 +85,11 @@ public class StatsController {
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,
+            @RequestParam(required = false) String type,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) BigDecimal ratingMin,
             @RequestParam(required = false) BigDecimal ratingMax) {
-        MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
+        MovieQueryDTO q = buildQuery(yearStart, yearEnd, mergeType(genres, type), country, ratingMin, ratingMax);
         return Result.ok(statsService.seasonAnalysis(q));
     }
 
@@ -95,10 +100,11 @@ public class StatsController {
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,
+            @RequestParam(required = false) String type,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) BigDecimal ratingMin,
             @RequestParam(required = false) BigDecimal ratingMax) {
-        MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
+        MovieQueryDTO q = buildQuery(yearStart, yearEnd, mergeType(genres, type), country, ratingMin, ratingMax);
         return Result.ok(statsService.topDirectors(n, q));
     }
 
@@ -118,11 +124,23 @@ public class StatsController {
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,
+            @RequestParam(required = false) String type,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) BigDecimal ratingMin,
             @RequestParam(required = false) BigDecimal ratingMax) {
-        MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
+        MovieQueryDTO q = buildQuery(yearStart, yearEnd, mergeType(genres, type), country, ratingMin, ratingMax);
         return Result.ok(statsService.overview(q, n));
+    }
+
+    /**
+     * 合并 type 与 genres 参数：课程规范用 type（单类型），
+     * 内部统一为 genres 列表；两者同时传时合并去重。
+     */
+    private List<String> mergeType(List<String> genres, String type) {
+        java.util.List<String> merged = new java.util.ArrayList<>();
+        if (genres != null) merged.addAll(genres);
+        if (type != null && !type.isBlank() && !merged.contains(type)) merged.add(type);
+        return merged.isEmpty() ? null : merged;
     }
 
     /** 构造共享查询 DTO */

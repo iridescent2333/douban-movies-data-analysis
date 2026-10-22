@@ -65,6 +65,21 @@
     return ' rating-low';
   }
 
+  /** 标题哈希 → 确定性渐变（海报加载失败时的兜底背景，与 ranking.js 同款） */
+  function cardGradient(title) {
+    var h = 0;
+    var str = title || 'movie';
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360;
+    return 'linear-gradient(150deg, hsl(' + h + ', 62%, 56%) 0%, hsl(' + ((h + 38) % 360) + ', 58%, 42%) 100%)';
+  }
+
+  /** 评价人数格式化：3225431 → 322.5万 */
+  function formatVotes(n) {
+    n = +n || 0;
+    if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+    return String(n);
+  }
+
   /**
    * 渲染作品列表
    * @param {Array} list  MovieDTO 数组
@@ -107,23 +122,37 @@
       body.innerHTML = '';
       body.appendChild(frag);
     } else if (grid) {
+      // 卡片视图：5 列 × 2 行 = 每页 10 条，海报封面风格与综合热榜一致
       var frag2 = document.createDocumentFragment();
       list.forEach(function (m) {
         var card = document.createElement('div');
         card.className = 'movie-card';
         card.dataset.id = m.id;
-        var ratingHtml = m.rating != null
-          ? '<span class="movie-rating' + ratingClass(m.rating).trim() + '">★ ' + (+m.rating).toFixed(1) + '</span>'
+        var title = m.title || '未命名';
+        // 海报走后端代理（豆瓣 CDN 防盗链）；失败时 onerror 移除 img，露出渐变底+片名
+        var posterImg = m.posterUrl
+          ? '<img class="card-poster-img" src="' + (global.APP_CONFIG.API_BASE + '/api/works/' + m.id + '/poster') +
+            '" alt="' + escapeHtml(title) + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">'
           : '';
         card.innerHTML =
-          '<div class="movie-poster">🎬</div>' +
+          '<div class="movie-poster" style="background:' + cardGradient(title) + '">' +
+            posterImg +
+            (m.rating != null
+              ? '<span class="card-rating' + ratingClass(m.rating) + '">★ ' + (+m.rating).toFixed(1) + '</span>'
+              : '') +
+            '<span class="card-poster-title">' + escapeHtml(title) + '</span>' +
+          '</div>' +
           '<div class="movie-info">' +
-            '<div class="movie-title">' + escapeHtml(m.title || '未命名') + '</div>' +
+            '<div class="movie-title" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</div>' +
             '<div class="movie-meta">' +
-              (m.year ? (m.year + ' · ') : '') + escapeHtml((m.genres || []).slice(0, 3).join(' / ') || '未知类型') + '<br/>' +
-              '导演：' + escapeHtml(m.director || '未知导演') +
+              (m.year ? (m.year + ' · ') : '') + escapeHtml((m.genres || []).slice(0, 2).join(' / ') || '未知类型') +
             '</div>' +
-            ratingHtml +
+            '<div class="movie-meta">' +
+              '导演：' + escapeHtml(m.director || '未知') +
+              (m.voteCount != null
+                ? '<span class="card-votes">' + formatVotes(m.voteCount) + '人评价</span>'
+                : '') +
+            '</div>' +
           '</div>';
         frag2.appendChild(card);
       });
