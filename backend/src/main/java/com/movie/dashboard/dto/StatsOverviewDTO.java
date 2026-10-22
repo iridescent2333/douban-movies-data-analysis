@@ -18,6 +18,9 @@ public class StatsOverviewDTO {
     /** KPI 汇总（供页面顶部 4 张卡片使用） */
     private KpiDTO kpi;
 
+    /** 评分分布直方图（F5） */
+    private List<RatingDistributionDTO> ratingDistribution;
+
     private List<YearTrendDTO> yearTrend;
 
     private List<GenreCompareDTO> genreCompare;
@@ -30,23 +33,30 @@ public class StatsOverviewDTO {
 
     private List<DirectorTopDTO> topDirectors;
 
+    /** 热门作品 TOP N（F7：按评分或评价人数） */
+    private List<MovieDTO> topWorks;
+
     public StatsOverviewDTO() {
     }
 
     public StatsOverviewDTO(KpiDTO kpi,
+                             List<RatingDistributionDTO> ratingDistribution,
                              List<YearTrendDTO> yearTrend,
                              List<GenreCompareDTO> genreCompare,
                              List<ScatterPointDTO> scatterCostBox,
                              List<HeatmapDTO> heatmap,
                              List<SeasonAnalysisDTO> seasonAnalysis,
-                             List<DirectorTopDTO> topDirectors) {
+                             List<DirectorTopDTO> topDirectors,
+                             List<MovieDTO> topWorks) {
         this.kpi = kpi;
+        this.ratingDistribution = ratingDistribution;
         this.yearTrend = yearTrend;
         this.genreCompare = genreCompare;
         this.scatterCostBox = scatterCostBox;
         this.heatmap = heatmap;
         this.seasonAnalysis = seasonAnalysis;
         this.topDirectors = topDirectors;
+        this.topWorks = topWorks;
     }
 
     /**
@@ -170,5 +180,21 @@ public class StatsOverviewDTO {
 
     public void setTopDirectors(List<DirectorTopDTO> topDirectors) {
         this.topDirectors = topDirectors;
+    }
+
+    public List<RatingDistributionDTO> getRatingDistribution() {
+        return ratingDistribution;
+    }
+
+    public void setRatingDistribution(List<RatingDistributionDTO> ratingDistribution) {
+        this.ratingDistribution = ratingDistribution;
+    }
+
+    public List<MovieDTO> getTopWorks() {
+        return topWorks;
+    }
+
+    public void setTopWorks(List<MovieDTO> topWorks) {
+        this.topWorks = topWorks;
     }
 }

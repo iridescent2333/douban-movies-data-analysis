@@ -113,7 +113,8 @@ public class MovieService {
         return names.containsAll(required);
     }
 
-    private MovieDTO toDTO(Movie m) {
+    /** Entity → DTO 的统一出口（StatsService 的热门作品榜也复用它） */
+    public MovieDTO toDTO(Movie m) {
         MovieDTO d = new MovieDTO();
         d.setId(m.getId());
         d.setTitle(m.getTitle());

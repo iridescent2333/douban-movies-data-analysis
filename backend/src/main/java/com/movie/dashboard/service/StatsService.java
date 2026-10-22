@@ -32,11 +32,19 @@ import java.util.stream.Collectors;
 @Service
 public class StatsService {
 
+    /** 评分分布直方图：桶宽 0.5 分，覆盖 2.0 – 10.0 */
+    private static final int RATING_BUCKETS = 16;
+    private static final double RATING_BUCKET_MIN = 2.0;
+    private static final double RATING_BUCKET_WIDTH = 0.5;
+
     @Autowired
     private MovieRepository movieRepository;
 
     @Autowired
     private MovieFinancialRepository financialRepository;
+
+    @Autowired
+    private MovieService movieService;
 
     /**
      * 统计上下文：一次查询得到的数据，供所有统计方法复用。
@@ -274,6 +282,66 @@ public class StatsService {
                 .collect(Collectors.toList());
     }
 
+    // ---------- 评分分布直方图（F5） ----------
+
+    /**
+     * 按 0.5 分粒度统计各评分段的电影数量。
+     */
+    @Transactional(readOnly = true)
+    public List<RatingDistributionDTO> ratingDistribution(MovieQueryDTO q) {
+        return computeRatingDistribution(loadContext(q));
+    }
+
+    private List<RatingDistributionDTO> computeRatingDistribution(StatsContext ctx) {
+        // 预建 16 个桶，保证没有数据的评分段也返回（count=0），前端画图连续
+        List<List<BigDecimal>> buckets = new ArrayList<>(RATING_BUCKETS);
+        for (int i = 0; i < RATING_BUCKETS; i++) buckets.add(new ArrayList<>());
+
+        for (Movie m : ctx.movies) {
+            if (m.getRating() == null) continue;
+            double r = m.getRating().doubleValue();
+            int idx = (int) Math.floor((r - RATING_BUCKET_MIN) / RATING_BUCKET_WIDTH);
+            if (idx < 0) idx = 0;
+            if (idx >= RATING_BUCKETS) idx = RATING_BUCKETS - 1;
+            buckets.get(idx).add(m.getRating());
+        }
+
+        List<RatingDistributionDTO> result = new ArrayList<>(RATING_BUCKETS);
+        for (int i = 0; i < RATING_BUCKETS; i++) {
+            double lo = RATING_BUCKET_MIN + i * RATING_BUCKET_WIDTH;
+            double hi = lo + RATING_BUCKET_WIDTH;
+            String label = (hi > 9.9 ? lo + "+" : String.format("%.1f-%.1f", lo, hi));
+            List<BigDecimal> values = buckets.get(i);
+            result.add(new RatingDistributionDTO(label, (long) values.size(), avgBigDecimal(values)));
+        }
+        return result;
+    }
+
+    // ---------- 热门作品 TOP N（F7） ----------
+
+    /**
+     * 热门作品 TOP N。
+     *
+     * @param n  返回条数
+     * @param by 排序依据：rating（评分，默认）或 votes（评价人数）
+     */
+    @Transactional(readOnly = true)
+    public List<MovieDTO> topWorks(int n, String by, MovieQueryDTO q) {
+        return computeTopWorks(loadContext(q), n, by);
+    }
+
+    private List<MovieDTO> computeTopWorks(StatsContext ctx, int n, String by) {
+        Comparator<Movie> cmp = "votes".equalsIgnoreCase(by)
+                ? Comparator.comparingInt(m -> m.getVoteCount() == null ? 0 : m.getVoteCount())
+                : Comparator.comparing(m -> m.getRating() == null ? BigDecimal.ZERO : m.getRating());
+        return ctx.movies.stream()
+                .filter(m -> m.getTitle() != null && !m.getTitle().isBlank())
+                .sorted(cmp.reversed())
+                .limit(Math.max(1, n))
+                .map(movieService::toDTO)
+                .collect(Collectors.toList());
+    }
+
     // ---------- 看板聚合（一次请求出全部图表 + KPI） ----------
 
     /**
@@ -284,22 +352,24 @@ public class StatsService {
      * </p>
      *
      * @param q    筛选条件
-     * @param topN 导演榜返回条数
+     * @param topN 导演榜 / 热门作品返回条数
      */
     @Transactional(readOnly = true)
     public StatsOverviewDTO overview(MovieQueryDTO q, int topN) {
         StatsContext ctx = loadContext(q);
 
+        List<RatingDistributionDTO> ratingDistribution = computeRatingDistribution(ctx);
         List<YearTrendDTO> yearTrend = computeYearTrend(ctx);
         List<GenreCompareDTO> genreCompare = computeGenreCompare(ctx);
         List<ScatterPointDTO> scatter = computeScatter(ctx);
         List<HeatmapDTO> heatmap = computeHeatmap(ctx);
         List<SeasonAnalysisDTO> season = computeSeasonAnalysis(ctx);
         List<DirectorTopDTO> directors = computeTopDirectors(ctx, topN);
+        List<MovieDTO> topWorks = computeTopWorks(ctx, topN, "rating");
 
         return new StatsOverviewDTO(
                 computeKpi(ctx, yearTrend),
-                yearTrend, genreCompare, scatter, heatmap, season, directors);
+                ratingDistribution, yearTrend, genreCompare, scatter, heatmap, season, directors, topWorks);
     }
 
     /**
