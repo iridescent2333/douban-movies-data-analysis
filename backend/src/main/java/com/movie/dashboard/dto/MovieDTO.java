@@ -31,6 +31,9 @@ public class MovieDTO {
 
     private String posterUrl;
 
+    /** 故事梗概（排行榜卡片展示用） */
+    private String intro;
+
     private List<String> genres;
 
     public MovieDTO() {
@@ -116,10 +119,17 @@ public class MovieDTO {
         this.posterUrl = posterUrl;
     }
 
+    public String getIntro() {
+        return intro;
+    }
+
+    public void setIntro(String intro) {
+        this.intro = intro;
+    }
+
     public List<String> getGenres() {
         return genres;
     }
-
     public void setGenres(List<String> genres) {
         this.genres = genres;
     }

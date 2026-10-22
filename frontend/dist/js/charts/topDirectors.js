@@ -55,8 +55,8 @@
           data: counts,
           itemStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#42AC4E' },
-              { offset: 1, color: '#7dd888' },
+              { offset: 0, color: '#fb7299' },
+              { offset: 1, color: '#ffb3cd' },
             ]),
             borderRadius: [4, 4, 0, 0],
           },

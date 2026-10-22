@@ -126,6 +126,7 @@ public class MovieService {
         d.setRating(m.getRating());
         d.setVoteCount(m.getVoteCount());
         d.setPosterUrl(m.getPosterUrl());
+        d.setIntro(m.getIntro());
         d.setGenres(m.getGenres() == null ? Collections.emptyList()
                 : m.getGenres().stream().map(Genre::getName).collect(Collectors.toList()));
         return d;
@@ -144,6 +145,7 @@ public class MovieService {
         d.setVoteCount(m.getVoteCount());
         d.setIntro(m.getIntro());
         d.setPosterUrl(m.getPosterUrl());
+        d.setIntro(m.getIntro());
         d.setGenres(m.getGenres() == null ? Collections.emptyList()
                 : m.getGenres().stream().map(Genre::getName).collect(Collectors.toList()));
         if (m.getFinancial() != null) {

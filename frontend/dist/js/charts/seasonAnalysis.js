@@ -87,7 +87,7 @@
         right: 10,
         top: 'center',
         inRange: {
-          color: ['#e04040', '#f0a020', '#42AC4E'],
+          color: ['#e04040', '#f0a020', '#fb7299'],
         },
         textStyle: { fontSize: 11 },
       },

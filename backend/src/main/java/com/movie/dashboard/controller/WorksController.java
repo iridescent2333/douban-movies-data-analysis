@@ -96,12 +96,13 @@ public class WorksController {
     }
 
     /** A5：TOP10（按评分或评价人数） */
-    @Operation(summary = "A5 热门作品 TOP N", description = "by=rating 按评分降序（默认），by=votes 按评价人数降序")
+    @Operation(summary = "A5 热门作品 TOP N", description = "by=rating 按评分降序（默认），by=votes 按评价人数降序；支持按类型/地区/年份区间筛选，用于「综合/分地区/分年代/分类型」排行榜")
     @GetMapping("/top")
     public Result<List<MovieDTO>> top(
             @Parameter(description = "返回条数，默认 10") @RequestParam(defaultValue = "10") int n,
             @Parameter(description = "排序依据：rating / votes") @RequestParam(defaultValue = "rating") String by,
             @Parameter(description = "类型（精确匹配）") @RequestParam(required = false) String type,
+            @Parameter(description = "国家/地区（分地区排行榜用）") @RequestParam(required = false) String country,
             @Parameter(description = "起始年份（含）") @RequestParam(required = false) Integer yearStart,
             @Parameter(description = "结束年份（含）") @RequestParam(required = false) Integer yearEnd,
             @Parameter(description = "最低评分（含）") @RequestParam(required = false) BigDecimal ratingMin,
@@ -110,6 +111,7 @@ public class WorksController {
 
         MovieQueryDTO q = new MovieQueryDTO();
         q.setGenres(type == null || type.isBlank() ? null : List.of(type));
+        q.setCountry(country);
         q.setYearStart(yearStart);
         q.setYearEnd(yearEnd);
         q.setRatingMin(ratingMin);

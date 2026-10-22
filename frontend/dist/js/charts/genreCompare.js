@@ -121,7 +121,7 @@
             name: '平均票房(万)',
             type: 'bar',
             data: boxOffices,
-            itemStyle: { color: '#42AC4E', borderRadius: [0, 4, 4, 0] },
+            itemStyle: { color: '#fb7299', borderRadius: [0, 4, 4, 0] },
           },
         ],
       };

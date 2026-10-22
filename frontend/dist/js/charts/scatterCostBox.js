@@ -121,8 +121,8 @@
             color: function (p) {
               // 评分越高颜色越接近豆瓣绿
               var r = p.data.rating || 7;
-              if (r >= 8.5) return '#42AC4E';
-              if (r >= 7.5) return '#7dd888';
+              if (r >= 8.5) return '#fb7299';
+              if (r >= 7.5) return '#ffb3cd';
               if (r >= 6.5) return '#f0a020';
               return '#e04040';
             },
