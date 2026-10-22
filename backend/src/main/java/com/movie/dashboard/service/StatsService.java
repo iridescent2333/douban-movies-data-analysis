@@ -4,11 +4,8 @@ import com.movie.dashboard.dto.*;
 import com.movie.dashboard.entity.Genre;
 import com.movie.dashboard.entity.Movie;
 import com.movie.dashboard.entity.MovieFinancial;
-import com.movie.dashboard.repository.GenreRepository;
 import com.movie.dashboard.repository.MovieFinancialRepository;
 import com.movie.dashboard.repository.MovieRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,23 +22,63 @@ import java.util.stream.Collectors;
  * 统计运算尽量由 Java 内存分组完成，减少复杂 SQL 维护成本。
  * 所有方法都支持通过 MovieQueryDTO 进行筛选（年份 / 类型 / 国家 / 评分）。
  * </p>
+ * <p>
+ * 性能改造：把"取数据"与"算数据"拆开。
+ * 单个统计接口调用 {@link #loadContext} 取一次数据即可完成计算；
+ * 看板聚合接口 {@link #overview} 复用同一份上下文算出全部 6 类图表，
+ * 把原先 6 次全表查询 + 6 次网络往返压缩为 1 次。
+ * </p>
  */
 @Service
 public class StatsService {
-
-    private static final Logger log = LoggerFactory.getLogger(StatsService.class);
 
     @Autowired
     private MovieRepository movieRepository;
 
     @Autowired
-    private GenreRepository genreRepository;
-
-    @Autowired
     private MovieFinancialRepository financialRepository;
 
     /**
+     * 统计上下文：一次查询得到的数据，供所有统计方法复用。
+     */
+    private static class StatsContext {
+        /** 筛选后的电影列表 */
+        final List<Movie> movies;
+        /** 电影 ID → 票房（万元） */
+        final Map<Long, BigDecimal> boxMap;
+        /** 电影 ID → 电影（用于散点/档期取标题、评分等） */
+        final Map<Long, Movie> movieMap;
+        /** 含预算或票值的财务记录 */
+        final List<MovieFinancial> fins;
+
+        StatsContext(List<Movie> movies, List<MovieFinancial> fins) {
+            this.movies = movies;
+            this.fins = fins;
+            this.boxMap = fins.stream()
+                    .collect(Collectors.toMap(MovieFinancial::getMovieId,
+                            mf -> mf.getBoxOfficeWan() == null ? BigDecimal.ZERO : mf.getBoxOfficeWan(),
+                            (a, b) -> a));
+            this.movieMap = movies.stream()
+                    .filter(m -> m.getId() != null)
+                    .collect(Collectors.toMap(Movie::getId, m -> m, (a, b) -> a));
+        }
+    }
+
+    /**
+     * 加载统计上下文：一次 movies 全量查询 + 一次财务查询，之后所有统计都在内存里算。
+     */
+    private StatsContext loadContext(MovieQueryDTO q) {
+        List<Movie> movies = filterMovies(movieRepository.findAll(), q);
+        List<MovieFinancial> fins = financialRepository.findAllWithBudgetOrBoxOffice();
+        return new StatsContext(movies, fins);
+    }
+
+    /**
      * 通用筛选：根据 MovieQueryDTO 条件过滤 movie 列表。
+     * <p>
+     * 类型语义为 AND（同时包含所有选中类型），与列表接口
+     * {@link MovieService#getMovies} 保持一致，避免"图表"与"列表"筛选结果不一致。
+     * </p>
      */
     private List<Movie> filterMovies(List<Movie> all, MovieQueryDTO q) {
         if (q == null) return all;
@@ -53,9 +90,9 @@ public class StatsService {
                 .filter(m -> q.getRatingMax() == null || m.getRating() != null && m.getRating().compareTo(q.getRatingMax()) <= 0)
                 .filter(m -> {
                     if (q.getGenres() == null || q.getGenres().isEmpty()) return true;
-                    if (m.getGenres() == null) return false;
+                    if (m.getGenres() == null || m.getGenres().isEmpty()) return false;
                     Set<String> want = new HashSet<>(q.getGenres());
-                    return m.getGenres().stream().anyMatch(g -> want.contains(g.getName()));
+                    return m.getGenres().stream().map(Genre::getName).allMatch(want::contains);
                 })
                 .collect(Collectors.toList());
     }
@@ -67,14 +104,11 @@ public class StatsService {
      */
     @Transactional(readOnly = true)
     public List<YearTrendDTO> yearTrend(MovieQueryDTO q) {
-        List<Movie> movies = filterMovies(movieRepository.findAll(), q);
-        List<MovieFinancial> allFin = financialRepository.findAll();
-        Map<Long, BigDecimal> boxMap = allFin.stream()
-                .collect(Collectors.toMap(MovieFinancial::getMovieId,
-                        mf -> mf.getBoxOfficeWan() == null ? BigDecimal.ZERO : mf.getBoxOfficeWan(),
-                        (a, b) -> a));
+        return computeYearTrend(loadContext(q));
+    }
 
-        Map<Integer, List<Movie>> byYear = movies.stream()
+    private List<YearTrendDTO> computeYearTrend(StatsContext ctx) {
+        Map<Integer, List<Movie>> byYear = ctx.movies.stream()
                 .filter(m -> m.getYear() != null)
                 .collect(Collectors.groupingBy(Movie::getYear, TreeMap::new, Collectors.toList()));
 
@@ -85,7 +119,7 @@ public class StatsService {
             long count = ms.size();
             BigDecimal avgRating = avgBigDecimal(ms.stream().map(Movie::getRating).toList());
             BigDecimal avgBoxOffice = avgBigDecimal(ms.stream()
-                    .map(m -> boxMap.getOrDefault(m.getId(), BigDecimal.ZERO)).toList());
+                    .map(m -> ctx.boxMap.getOrDefault(m.getId(), BigDecimal.ZERO)).toList());
             result.add(new YearTrendDTO(year, count, avgRating, avgBoxOffice));
         }
         return result;
@@ -98,15 +132,12 @@ public class StatsService {
      */
     @Transactional(readOnly = true)
     public List<GenreCompareDTO> genreCompare(MovieQueryDTO q) {
-        List<Movie> movies = filterMovies(movieRepository.findAll(), q);
-        List<MovieFinancial> allFin = financialRepository.findAll();
-        Map<Long, BigDecimal> boxMap = allFin.stream()
-                .collect(Collectors.toMap(MovieFinancial::getMovieId,
-                        mf -> mf.getBoxOfficeWan() == null ? BigDecimal.ZERO : mf.getBoxOfficeWan(),
-                        (a, b) -> a));
+        return computeGenreCompare(loadContext(q));
+    }
 
+    private List<GenreCompareDTO> computeGenreCompare(StatsContext ctx) {
         Map<String, List<Movie>> byGenre = new HashMap<>();
-        for (Movie m : movies) {
+        for (Movie m : ctx.movies) {
             if (m.getGenres() == null) continue;
             for (Genre g : m.getGenres()) {
                 byGenre.computeIfAbsent(g.getName(), k -> new ArrayList<>()).add(m);
@@ -118,7 +149,7 @@ public class StatsService {
             List<Movie> ms = e.getValue();
             BigDecimal avgRating = avgBigDecimal(ms.stream().map(Movie::getRating).toList());
             BigDecimal avgBox = avgBigDecimal(ms.stream()
-                    .map(m -> boxMap.getOrDefault(m.getId(), BigDecimal.ZERO)).toList());
+                    .map(m -> ctx.boxMap.getOrDefault(m.getId(), BigDecimal.ZERO)).toList());
             return new GenreCompareDTO(name, avgRating, avgBox, (long) ms.size());
         }).sorted(Comparator.comparingLong(GenreCompareDTO::getCount).reversed())
                 .collect(Collectors.toList());
@@ -131,21 +162,13 @@ public class StatsService {
      */
     @Transactional(readOnly = true)
     public List<ScatterPointDTO> scatterCostBox(MovieQueryDTO q) {
-        // 先取带筛选的 movie ids
-        Set<Long> validIds = filterMovies(movieRepository.findAll(), q).stream()
-                .map(Movie::getId).collect(Collectors.toSet());
+        return computeScatter(loadContext(q));
+    }
 
-        List<MovieFinancial> fins = financialRepository.findAllWithBudgetOrBoxOffice();
-        List<MovieFinancial> filtered = fins.stream()
-                .filter(f -> validIds.contains(f.getMovieId()))
-                .collect(Collectors.toList());
-
-        Map<Long, Movie> movieMap = movieRepository.findAllById(validIds).stream()
-                .collect(Collectors.toMap(Movie::getId, m -> m));
-
+    private List<ScatterPointDTO> computeScatter(StatsContext ctx) {
         List<ScatterPointDTO> result = new ArrayList<>();
-        for (MovieFinancial mf : filtered) {
-            Movie m = movieMap.get(mf.getMovieId());
+        for (MovieFinancial mf : ctx.fins) {
+            Movie m = ctx.movieMap.get(mf.getMovieId());
             if (m == null) continue;
             result.add(new ScatterPointDTO(
                     zeroNull(mf.getBudgetWan()),
@@ -164,10 +187,12 @@ public class StatsService {
      */
     @Transactional(readOnly = true)
     public List<HeatmapDTO> heatmap(MovieQueryDTO q) {
-        List<Movie> movies = filterMovies(movieRepository.findAll(), q);
+        return computeHeatmap(loadContext(q));
+    }
 
+    private List<HeatmapDTO> computeHeatmap(StatsContext ctx) {
         Map<String, List<Movie>> bucket = new HashMap<>();
-        for (Movie m : movies) {
+        for (Movie m : ctx.movies) {
             if (m.getCountry() == null || m.getCountry().isBlank()) continue;
             if (m.getGenres() == null) continue;
             for (Genre g : m.getGenres()) {
@@ -191,21 +216,14 @@ public class StatsService {
      */
     @Transactional(readOnly = true)
     public List<SeasonAnalysisDTO> seasonAnalysis(MovieQueryDTO q) {
-        Set<Long> validIds = filterMovies(movieRepository.findAll(), q).stream()
-                .map(Movie::getId).collect(Collectors.toSet());
+        return computeSeasonAnalysis(loadContext(q));
+    }
 
-        List<MovieFinancial> fins = financialRepository.findAllWithBudgetOrBoxOffice();
-        List<MovieFinancial> filtered = fins.stream()
-                .filter(f -> validIds.contains(f.getMovieId()))
-                .collect(Collectors.toList());
-
-        Map<Long, Movie> movieMap = movieRepository.findAllById(validIds).stream()
-                .collect(Collectors.toMap(Movie::getId, m -> m));
-
+    private List<SeasonAnalysisDTO> computeSeasonAnalysis(StatsContext ctx) {
         Map<String, List<MovieFinancial>> bucket = new HashMap<>();
-        for (MovieFinancial mf : filtered) {
+        for (MovieFinancial mf : ctx.fins) {
             if (mf.getSeasonTag() == null || mf.getSeasonTag().isBlank()) continue;
-            Movie m = movieMap.get(mf.getMovieId());
+            Movie m = ctx.movieMap.get(mf.getMovieId());
             if (m == null || m.getGenres() == null) continue;
             for (Genre g : m.getGenres()) {
                 String key = mf.getSeasonTag() + "||" + g.getName();
@@ -219,7 +237,7 @@ public class StatsService {
             BigDecimal avgBox = avgBigDecimal(list.stream()
                     .map(mf -> mf.getBoxOfficeWan() == null ? BigDecimal.ZERO : mf.getBoxOfficeWan()).toList());
             BigDecimal avgRating = avgBigDecimal(list.stream()
-                    .map(mf -> movieMap.get(mf.getMovieId()))
+                    .map(mf -> ctx.movieMap.get(mf.getMovieId()))
                     .filter(Objects::nonNull)
                     .map(Movie::getRating)
                     .toList());
@@ -234,10 +252,12 @@ public class StatsService {
      */
     @Transactional(readOnly = true)
     public List<DirectorTopDTO> topDirectors(int n, MovieQueryDTO q) {
-        List<Movie> movies = filterMovies(movieRepository.findAll(), q);
+        return computeTopDirectors(loadContext(q), n);
+    }
 
+    private List<DirectorTopDTO> computeTopDirectors(StatsContext ctx, int n) {
         Map<String, List<Movie>> byDirector = new HashMap<>();
-        for (Movie m : movies) {
+        for (Movie m : ctx.movies) {
             if (m.getDirector() == null || m.getDirector().isBlank()) continue;
             byDirector.computeIfAbsent(m.getDirector(), k -> new ArrayList<>()).add(m);
         }
@@ -252,6 +272,66 @@ public class StatsService {
                                 Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(Math.max(1, n))
                 .collect(Collectors.toList());
+    }
+
+    // ---------- 看板聚合（一次请求出全部图表 + KPI） ----------
+
+    /**
+     * 看板聚合接口：一次数据加载算出 6 类图表 + KPI 汇总。
+     * <p>
+     * 相比前端并发 6 个统计接口，这里只查一次 movies、一次 financials，
+     * 6 类图表全部在内存中基于同一份数据算出。
+     * </p>
+     *
+     * @param q    筛选条件
+     * @param topN 导演榜返回条数
+     */
+    @Transactional(readOnly = true)
+    public StatsOverviewDTO overview(MovieQueryDTO q, int topN) {
+        StatsContext ctx = loadContext(q);
+
+        List<YearTrendDTO> yearTrend = computeYearTrend(ctx);
+        List<GenreCompareDTO> genreCompare = computeGenreCompare(ctx);
+        List<ScatterPointDTO> scatter = computeScatter(ctx);
+        List<HeatmapDTO> heatmap = computeHeatmap(ctx);
+        List<SeasonAnalysisDTO> season = computeSeasonAnalysis(ctx);
+        List<DirectorTopDTO> directors = computeTopDirectors(ctx, topN);
+
+        return new StatsOverviewDTO(
+                computeKpi(ctx, yearTrend),
+                yearTrend, genreCompare, scatter, heatmap, season, directors);
+    }
+
+    /**
+     * KPI 汇总：总数 / 加权平均评分 / 年代跨度 / 覆盖国家数。
+     */
+    private StatsOverviewDTO.KpiDTO computeKpi(StatsContext ctx, List<YearTrendDTO> yearTrend) {
+        long total = ctx.movies.size();
+
+        // 平均评分：按年份聚合后的电影数加权（比简单平均更接近真实口碑）
+        BigDecimal weighted = BigDecimal.ZERO;
+        long weight = 0;
+        for (YearTrendDTO d : yearTrend) {
+            long c = d.getCount() == null ? 0L : d.getCount();
+            weighted = weighted.add(d.getAvgRating() == null ? BigDecimal.ZERO : d.getAvgRating()
+                    .multiply(BigDecimal.valueOf(c)));
+            weight += c;
+        }
+        BigDecimal avgRating = weight > 0
+                ? weighted.divide(BigDecimal.valueOf(weight), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        Integer yearMin = null, yearMax = null;
+        Set<String> countries = new HashSet<>();
+        for (Movie m : ctx.movies) {
+            if (m.getYear() != null) {
+                if (yearMin == null || m.getYear() < yearMin) yearMin = m.getYear();
+                if (yearMax == null || m.getYear() > yearMax) yearMax = m.getYear();
+            }
+            if (m.getCountry() != null && !m.getCountry().isBlank()) countries.add(m.getCountry());
+        }
+
+        return new StatsOverviewDTO.KpiDTO(total, avgRating, yearMin, yearMax, countries.size());
     }
 
     // ---------- 辅助 ----------

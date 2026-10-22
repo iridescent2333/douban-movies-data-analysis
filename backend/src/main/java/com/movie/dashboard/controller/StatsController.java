@@ -102,6 +102,29 @@ public class StatsController {
         return Result.ok(statsService.topDirectors(n, q));
     }
 
+    /**
+     * 看板聚合接口：一次请求返回 6 类图表数据 + KPI 汇总。
+     * <p>
+     * 前端首屏与筛选刷新都调用这一个接口：
+     * 后端只查一次 movies / movie_financials，6 类图表基于同一份数据在内存里算出，
+     * 相比并发 6 个统计接口可显著降低响应时间与数据库压力。
+     * </p>
+     *
+     * @param n 导演榜返回条数（默认 10，前端看板传 20）
+     */
+    @GetMapping("/overview")
+    public Result<StatsOverviewDTO> overview(
+            @RequestParam(defaultValue = "10") int n,
+            @RequestParam(required = false) Integer yearStart,
+            @RequestParam(required = false) Integer yearEnd,
+            @RequestParam(required = false) List<String> genres,
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) BigDecimal ratingMin,
+            @RequestParam(required = false) BigDecimal ratingMax) {
+        MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
+        return Result.ok(statsService.overview(q, n));
+    }
+
     /** 构造共享查询 DTO */
     private MovieQueryDTO buildQuery(Integer yearStart, Integer yearEnd, List<String> genres,
                                       String country, BigDecimal ratingMin, BigDecimal ratingMax) {
