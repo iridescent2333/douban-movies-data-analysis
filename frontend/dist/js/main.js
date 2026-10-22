@@ -281,7 +281,10 @@
   /** 分地区页：地区 chips */
   function initRegionPage() {
     API.getWithCache('/api/movies/filters', null).then(function (data) {
-      var countries = (data && data.countries) || [];
+      // 后端返回 10 个核心地区；失败时回退到前端常量，保证分地区热榜标签恒为 10 个
+      var countries = (data && data.countries && data.countries.length)
+        ? data.countries
+        : (CONFIG.CORE_REGIONS || []);
       var bar = document.getElementById('regionChips');
       bar.innerHTML = '';
       var all = document.createElement('button');
@@ -770,41 +773,43 @@
 
   function transformScatter(list) {
     if (!list || !list.length) return [];
-    // 评分 × 热度散点（公开数据集无真实票房，改用两个真实维度）
+    // 评分 × 热度散点（公开数据集无真实票房，改用两个真实维度）。
+    // ScatterPointDTO 字段：id/title/rating/voteCount/country(主地区)/genre(主类型)
     return list.map(function (d) {
       return {
-        movie: d.title, title: d.title,
         id: d.id,
+        title: d.title,
         rating: d.rating != null ? +d.rating : 0,
         votes: d.voteCount != null ? +d.voteCount : 0,
-        genre: d.country,
+        country: d.country,   // 主地区：用于图例分组着色
+        genre: d.genre,       // 主类型：保留以备扩展
       };
     });
   }
 
   function transformHeatmap(list) {
     if (!list || !list.length) return { countries: [], genres: [], data: [] };
-    // 后端返回全部地区 × 类型（含合拍片拆分），轴太多会挤成一团：
-    // 只保留影片数最多的 12 个热门地区 × 10 个热门类型，矩阵清晰易读
-    var MAX_COUNTRIES = 12, MAX_GENRES = 10;
-    var countryTotal = {}, genreTotal = {};
-    list.forEach(function (d) {
-      countryTotal[d.country] = (countryTotal[d.country] || 0) + (d.count || 0);
-      genreTotal[d.genre] = (genreTotal[d.genre] || 0) + (d.count || 0);
-    });
-    var topKeys = function (totals, max) {
-      return Object.keys(totals).sort(function (a, b) { return totals[b] - totals[a]; }).slice(0, max);
-    };
-    var countrySet = topKeys(countryTotal, MAX_COUNTRIES);
-    var genreSet = topKeys(genreTotal, MAX_GENRES);
+    // 课程要求：横轴固定为 12 个核心类型、纵轴固定为 10 个核心地区，
+    // 不再按数量动态裁剪（避免轴漂移、矩阵不整齐）。后端已归并为主类型/主地区，
+    // 这里只把落在核心字典内的格子放进矩阵，其余（极少数纯非核心产地）丢弃。
+    var CORE_REGIONS = (CONFIG && CONFIG.CORE_REGIONS) || [];
+    var CORE_TYPES = (CONFIG && CONFIG.CORE_TYPES) || [];
+    var regionIdx = {}, typeIdx = {};
+    CORE_REGIONS.forEach(function (r, i) { regionIdx[r] = i; });
+    CORE_TYPES.forEach(function (t, i) { typeIdx[t] = i; });
+
     var data = [];
     list.forEach(function (d) {
-      var ci = countrySet.indexOf(d.country);
-      var gi = genreSet.indexOf(d.genre);
-      if (ci === -1 || gi === -1) return;
-      data.push([ci, gi, d.avgRating != null ? +d.avgRating : 0, d.count || 0]);
+      var ri = regionIdx[d.country];
+      var gi = typeIdx[d.genre];
+      if (ri === undefined || gi === undefined) return;   // 非核心地区/类型跳过
+      data.push([gi, ri, d.avgRating != null ? +d.avgRating : 0, d.count || 0]);
     });
-    return { countries: countrySet, genres: genreSet, data: data };
+    return {
+      countries: CORE_REGIONS.slice(),
+      genres: CORE_TYPES.slice(),
+      data: data,
+    };
   }
 
   function transformSeason(list) {

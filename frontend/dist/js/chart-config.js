@@ -57,7 +57,6 @@
       source: 'scatterCostBox',
       transform: 'transformScatter',
       page: 'insight-deep',
-      lazy: 'visibility',
     },
     {
       key: 'heatmap',
@@ -65,7 +64,6 @@
       source: 'heatmap',
       transform: 'transformHeatmap',
       page: 'insight-deep',
-      lazy: 'visibility',
     },
     {
       key: 'seasonAnalysis',

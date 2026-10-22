@@ -17,7 +17,7 @@ build_dataset.py —— 把 Kaggle「Douban Movies Dataset」真实豆瓣数据
   title         片名
   director      导演（数据源仅保留第一位）
   lead_actor    主演（最多 5 位，"; " 分隔）
-  country       制片国家/地区（合拍片保留全部，" / " 分隔，如 "中国大陆 / 中国香港"）
+  country       制片国家/地区（归并后的「主地区」，仅取 10 个核心地区之一，如 "美国"）
   year          上映年份（release_date 前 4 位）
   duration      片长（分钟，从 "117分钟" 提取数字）
   rating        豆瓣评分
@@ -27,13 +27,78 @@ build_dataset.py —— 把 Kaggle「Douban Movies Dataset」真实豆瓣数据
   intro         剧情简介
   poster_url    豆瓣海报图片 URL（img*.doubanio.com）
   link          豆瓣条目页 URL
-  genres        类型（"; " 分隔，导入时拆分进 genres / movie_genres 两张表）
+  genres        类型（归并后的单一「主类型」，仅取 12 个核心类型之一，如 "剧情"）
 """
 import argparse
 import csv
 import re
 import sys
 from collections import OrderedDict
+
+# ============================================================================
+# 核心类型 / 核心地区字典（课程要求：全站统一口径，避免选项爆炸）
+# ----------------------------------------------------------------------------
+# 类型仅保留 12 个典型类型；地区仅保留 10 个核心电影产出国家/地区。
+# 数据库里每部电影按「主类型 / 主地区」归类（合拍片取第一个命中的核心项），
+# 小众类型 / 细碎多国组合标签全部剔除，保证课堂演示时每个筛选/榜单选项都有足够数据。
+# ============================================================================
+
+# 12 个核心电影类型（展示顺序即此顺序）
+CORE_GENRES = [
+    '剧情', '爱情', '喜剧', '恐怖', '悬疑', '战争',
+    '历史', '纪录片', '动作', '动画', '奇幻', '科幻',
+]
+
+# 10 个核心电影产出国家/地区（展示顺序即此顺序）
+CORE_REGIONS = [
+    '中国大陆', '中国台湾', '中国香港', '美国', '日本',
+    '韩国', '英国', '法国', '德国', '俄罗斯',
+]
+
+# 原始类型 → 核心类型 映射（合拍片拆分后只保留核心类型）
+# 未在表中的原始类型会回退到「剧情」（绝大多数未在表中的类型本质即剧情向）
+GENRE_MAP = {
+    '剧情': '剧情', '爱情': '爱情', '喜剧': '喜剧', '恐怖': '恐怖', '悬疑': '悬疑',
+    '战争': '战争', '历史': '历史', '纪录片': '纪录片', '动作': '动作', '动画': '动画',
+    '奇幻': '奇幻', '科幻': '科幻',
+    '犯罪': '剧情', '惊悚': '悬疑', '古装': '历史', '家庭': '剧情', '传记': '剧情',
+    '武侠': '动作', '同性': '剧情', '音乐': '剧情', '歌舞': '喜剧', '运动': '剧情',
+    '灾难': '动作', '儿童': '动画', '西部': '动作', '情色': '剧情', '短片': '剧情',
+    # 其它长尾（短片/戏曲/情色等）一律归剧情，保证全部落入 12 个核心类型
+}
+
+# 主类型优先级：数值越大越「具体」，越优先作为影片主类型。
+# 这样「剧情 ; 战争」会归为战争、「剧情 ; 爱情」归为爱情，避免战争/历史/爱情等
+# 经常作为次要标签的类型被剧情「吞掉」而计数归零。剧情最泛，优先级最低。
+GENRE_PRIORITY = {
+    '纪录片': 12, '科幻': 11, '奇幻': 10, '动画': 9, '恐怖': 8, '战争': 7,
+    '历史': 6, '悬疑': 5, '动作': 4, '喜剧': 3, '爱情': 2, '剧情': 1,
+}
+
+
+def main_core_genre(raw_genres):
+    """取主类型：在能映射到核心类型的原始类型中，选优先级最高（最具体）的一个；
+    都没有则回退剧情。"""
+    best = None
+    best_pri = -1
+    for g in raw_genres:
+        core = GENRE_MAP.get(g.strip())
+        if not core:
+            continue
+        pri = GENRE_PRIORITY.get(core, 0)
+        if pri > best_pri:
+            best = core
+            best_pri = pri
+    return best or '剧情'
+
+
+def main_core_region(raw_countries):
+    """取主地区：按原始国家出现顺序，选第一个属于 10 核心地区的；都没有则保留原始主产地。"""
+    for c in raw_countries:
+        c = c.strip()
+        if c in CORE_REGIONS:
+            return c
+    return raw_countries[0].strip() if raw_countries else '其他'
 
 
 def month_to_season(month: int) -> str:
@@ -117,6 +182,7 @@ def main() -> int:
         seen[link] = (r, title, rating, votes, genres, date)
 
     out_rows = []
+    unmapped = 0
     for link, (r, title, rating, votes, genres, (year, month, release_date)) in seen.items():
         # 豆瓣条目 ID：从链接 https://movie.douban.com/subject/26752088/ 提取
         m = re.search(r'/subject/(\d+)', link)
@@ -126,9 +192,18 @@ def main() -> int:
 
         actors = [a.strip() for a in (r.get('actors') or '').split(',') if a.strip()]
         # 国家/地区在数据源里是 " / " 分隔（如 "中国大陆 / 中国香港"）。
-        # 保留完整串：分地区热榜按"包含"匹配，合拍片同时计入每个地区的热门榜，
-        # 这样德国/意大利/西班牙等传统电影强国也能凑够 ≥20 部组成完整榜单
+        # 按课程要求归并为单一主地区：取第一个命中的 10 个核心地区；
+        # 纯非核心产地（如意大利）保留原始主产地，不进入 10 个筛选/榜单选项但仍在库。
         countries = [c.strip() for c in re.split(r'[/,]', (r.get('countries') or '')) if c.strip()]
+        main_country = main_core_region(countries)
+
+        # 类型归并为单一主类型：取第一个能映射到 12 个核心类型的原始类型；
+        # 多类型合拍片拆分后只保留这一个核心「主类型」，剔除全部小众类型。
+        main_genre = main_core_genre(genres)
+        if main_genre not in CORE_GENRES:
+            unmapped += 1
+            main_genre = '剧情'
+
         duration = parse_runtime(r.get('runtime'))
         summary = clean_text(r.get('summary'))
         poster = clean_text(r.get('poster'))
@@ -140,7 +215,7 @@ def main() -> int:
             ('title', title),
             ('director', clean_text(r.get('directors')) or '未知'),
             ('lead_actor', ' ; '.join(actors)),
-            ('country', ' / '.join(countries) if countries else '其他'),
+            ('country', main_country),
             ('year', year),
             ('duration', duration if duration is not None else ''),
             ('rating', rating),
@@ -150,7 +225,7 @@ def main() -> int:
             ('intro', summary),
             ('poster_url', poster),
             ('link', link),
-            ('genres', ' ; '.join(genres)),
+            ('genres', main_genre),
         ]))
 
     # 按评价人数降序输出（可读性好，TOP 排行直接就是文件头部）

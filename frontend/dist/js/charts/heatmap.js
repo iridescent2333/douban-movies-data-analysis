@@ -51,7 +51,7 @@
             + (p.value[3] != null ? '<br/>影片数：' + p.value[3] + ' 部' : '');
         },
       },
-      grid: { left: 100, right: 70, top: 24, bottom: 70 },
+      grid: { left: 110, right: 70, top: 24, bottom: 72 },
       xAxis: {
         type: 'category',
         data: data.genres,
@@ -65,8 +65,8 @@
         axisLabel: { fontSize: 12 },
       },
       visualMap: {
-        min: 5,
-        max: 9,
+        min: 6,
+        max: 9.5,
         calculable: true,
         orient: 'vertical',
         right: 10,

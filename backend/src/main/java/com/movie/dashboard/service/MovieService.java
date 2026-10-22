@@ -1,5 +1,6 @@
 package com.movie.dashboard.service;
 
+import com.movie.dashboard.Constants;
 import com.movie.dashboard.dto.*;
 import com.movie.dashboard.entity.Genre;
 import com.movie.dashboard.entity.Movie;
@@ -17,9 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -97,62 +96,16 @@ public class MovieService {
     /**
      * 聚合所有筛选器下拉：年份 / 国家 / 类型。
      * <p>
-     * 国家与类型只返回"热门且有代表性"的选项（见 {@link #hotRegions} / {@link #hotGenres}），
-     * 长尾小地区/冷门口碑标签不进入筛选器，保证每个选项背后都有足够数据可展示。
+     * 国家与类型返回全站统一的「核心」列表（见 {@link Constants#CORE_REGIONS} /
+     * {@link Constants#CORE_GENRES}），顺序固定，保证筛选器、分地区/分类型热榜、
+     * 类型对比图表、深度分析热力矩阵口径完全一致，且不随数据库内容膨胀出冗余选项。
+     * 年份仍来自数据库（覆盖真实数据跨度）。
      * </p>
      */
     @Transactional(readOnly = true)
     public FilterOptionsDTO getFilterOptions() {
         List<Integer> years = movieRepository.findDistinctYears();
-        return new FilterOptionsDTO(years, hotRegions(), hotGenres());
-    }
-
-    /** 热门地区入选门槛：该地区（含合拍）影片数 ≥ 20，保证能组成完整热榜 */
-    private static final int HOT_REGION_MIN_COUNT = 20;
-    /** 热门类型入选门槛：该类型影片数 ≥ 60，对应剧情/动作/喜剧/科幻/悬疑等约 17 个主流标签 */
-    private static final int HOT_GENRE_MIN_COUNT = 60;
-
-    /**
-     * 热门制片地区（参考豆瓣/B站电影分区口径）：
-     * 中国大陆、中国香港、中国台湾、美国、日本、韩国、英国、法国、德国、加拿大、意大利、西班牙 等。
-     * <p>统计口径为"包含"：合拍片同时计入每个地区；按影片数降序返回。</p>
-     */
-    @Transactional(readOnly = true)
-    public List<String> hotRegions() {
-        Map<String, Long> counts = new HashMap<>();
-        for (Movie m : movieRepository.findAll()) {
-            if (m.getCountry() == null || m.getCountry().isBlank()) continue;
-            for (String c : m.getCountry().split("/")) {
-                String name = c.trim();
-                if (!name.isEmpty()) counts.merge(name, 1L, Long::sum);
-            }
-        }
-        return counts.entrySet().stream()
-                .filter(e -> e.getValue() >= HOT_REGION_MIN_COUNT)
-                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 热门电影类型（参考豆瓣/B站分类口径）：
-     * 剧情、喜剧、动作、爱情、科幻、动画、悬疑、惊悚、犯罪、奇幻、冒险、战争、历史、恐怖、家庭、传记 等。
-     * <p>按影片数降序返回，只保留数量足够、有代表性的标签。</p>
-     */
-    @Transactional(readOnly = true)
-    public List<String> hotGenres() {
-        Map<String, Long> counts = new HashMap<>();
-        for (Movie m : movieRepository.findAll()) {
-            if (m.getGenres() == null) continue;
-            for (Genre g : m.getGenres()) {
-                if (g.getName() != null && !g.getName().isBlank()) counts.merge(g.getName(), 1L, Long::sum);
-            }
-        }
-        return counts.entrySet().stream()
-                .filter(e -> e.getValue() >= HOT_GENRE_MIN_COUNT)
-                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+        return new FilterOptionsDTO(years, Constants.CORE_REGIONS, Constants.CORE_GENRES);
     }
 
     // ---------- 转换 ----------

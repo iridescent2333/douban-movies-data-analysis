@@ -32,10 +32,10 @@
     if (chart) chart.dispose();
     chart = echarts.init(dom, getTheme());
 
-    // 按国家/地区分组，一组一个系列（图例可勾选）
+    // 按主地区分组，一组一个系列（图例可勾选显隐）
     var groups = {};
     data.forEach(function (d) {
-      var key = d.genre || '其他';
+      var key = d.country || '其他';
       (groups[key] = groups[key] || []).push(d);
     });
 
