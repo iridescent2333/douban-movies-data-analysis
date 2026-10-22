@@ -205,6 +205,7 @@ Started MovieDashboardApplication in x seconds
 ```bash
 # 用仓库模板生成配置：复制 docs/nginx.conf.example 覆盖 <你的nginx>/conf/nginx.conf
 # 把 root 一行的 __YOUR_FRONTEND_DIST_PATH__ 改成本项目 frontend/dist 的绝对路径（正斜杠）
+# listen 当前为 8083（80 被占用时的团队约定）；若改回 80，访问地址变成 http://localhost/
 ```
 
 ```powershell
@@ -216,11 +217,11 @@ cd frontend/nginx-1.26.2
 
 ### Step 4 · 打开看板
 
-浏览器访问 **http://localhost/**（Ctrl+Shift+R 强刷避免旧缓存）。
+浏览器访问 **http://localhost:8083/**（Ctrl+Shift+R 强刷避免旧缓存）。
 
 ### Step 5 · ApiFox 调试接口（可选）
 
-ApiFox → 新建项目 → 导入 → OpenAPI/Swagger → 选 `docs/apifox-import.json` → 新建环境，`baseURL` 填 `http://localhost`（走 Nginx）或 `http://localhost:8081`（直连后端）。
+ApiFox → 新建项目 → 导入 → OpenAPI/Swagger → 选 `docs/apifox-import.json` → 新建环境，`baseURL` 填 `http://localhost:8083`（走 Nginx）或 `http://localhost:8081`（直连后端）。
 
 ---
 
@@ -335,7 +336,7 @@ genres ──< movie_genres >── movies ──1:1── movie_financials
 | 页面能打开但图表全空 | 后端没起来 / 前端 JS 缓存 | 先验证 `http://localhost:8081/api/movies?page=0&size=1`；再 Ctrl+Shift+R 强刷 |
 | F12 里 `/api/...` 报 **502 Bad Gateway** | Nginx 转发不到后端 | 确认后端在 8081 监听，检查 nginx.conf 的 `proxy_pass` 端口 |
 | 页面 404 且样式全丢 | nginx.conf 的 `root` 路径不对 | 改成本机 `frontend/dist` 绝对路径（正斜杠）后 `nginx.exe -s reload` |
-| Nginx 启动失败 | 80 端口被 IIS / Skype / 另一个 nginx 占用 | `netstat -ano \| findstr :80` 查 PID → `taskkill /F /PID xxx`，或改 `listen` 端口 |
+| Nginx 启动失败 | 8083 端口被占用（团队约定端口，原 80 常被 IIS / 旧 nginx 占） | `netstat -ano \| findstr :8083` 查 PID → `taskkill /F /PID xxx`，或再换一个 `listen` 端口并同步本文档 |
 | IDEA Run 报 `Port 8081 already in use` | 旧进程没关 | `netstat -ano \| findstr :8081` → `taskkill /F /PID xxx` |
 | 改了 CSV 但数据没变 | DataInitializer 检测到表非空会跳过 | `TRUNCATE` movies 与 movie_financials 后重启 |
 | 筛选后数量没变化 | 前端 localStorage 缓存 5 分钟 | Ctrl+Shift+R 强刷或清缓存验证 |

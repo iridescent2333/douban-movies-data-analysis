@@ -6,7 +6,10 @@
 #      （本项目已自带 Nginx：frontend/nginx-1.26.2/conf/nginx.conf）
 #   2. 把下面 root 一行的 __YOUR_FRONTEND_DIST_PATH__ 改成你本机
 #      frontend/dist 目录的绝对路径（用正斜杠 /）
-#   3. 启动：cd <nginx> && nginx.exe
+#   3. listen 当前为 8083（80 端口常被 IIS / 旧 nginx 占用，团队约定 8083）
+#      —— 改 listen 不影响后端（proxy_pass 仍指向 8081），只影响浏览器访问地址：
+#         listen 8083 → http://localhost:8083/    listen 80 → http://localhost/
+#   4. 启动：cd <nginx> && nginx.exe
 #      重载：nginx.exe -s reload    停止：nginx.exe -s stop
 # =============================================================
 worker_processes  1;
@@ -26,7 +29,7 @@ http {
     error_log   logs/error.log;
 
     server {
-        listen       80;
+        listen       8083;
         server_name  localhost;
 
         # ===== 前端静态文件根目录【改成你本机 frontend/dist 绝对路径】=====
