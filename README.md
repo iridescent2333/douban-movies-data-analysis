@@ -1,10 +1,12 @@
 # 豆瓣电影数据洞察看板
 
-> 面向电影数据爱好者的多维度数据分析看板 —— Web 开发技术课程小组作业
+> 面向普通电影观众的数据看板 —— Web 开发技术课程小组作业
 >
 > 项目定位（课程要求）：**帮助用户发现优质作品、了解评分分布与类型趋势**
 >
-> 通过 Spring Boot + MySQL + 原生前端 + ECharts，把 850 部电影的评分、票房、成本、类型、地区、档期数据整合为可交互的可视化看板，实现课程要求的 F1-F9 前端功能与 A1-A5 后端接口。
+> 界面形态：参考哔哩哔哩网页版 —— **左侧多级菜单 + 右侧内容按页面切换**（不做长页滚动），
+> 排行榜参考豆瓣/B 站影视榜单（封面 + 排名 + 导演主演 + 梗概），普通观众也能轻松读。
+> 技术栈：Spring Boot + MySQL + 原生前端 + ECharts，实现课程要求的 F1-F9 前端功能与 A1-A5 后端接口。
 
 ---
 
@@ -14,14 +16,14 @@
 
 | 序号 | 截图内容 | 占位文件 |
 |------|---------|---------|
-| 1 | 看板整体效果（标题 + 筛选区 + F5-F8 核心图表 + 作品表格） | `docs/screenshots/01-overview.png` |
-| 2 | 筛选联动效果（改类型/评分后图表与表格同步刷新） | `docs/screenshots/02-filter.png` |
-| 3 | F7 热门 TOP10（按评分 / 按评价人数切换） | `docs/screenshots/03-topworks.png` |
-| 4 | F8 类型对比雷达图 | `docs/screenshots/04-radar.png` |
-| 5 | 作品详情弹窗（点击表格行弹出） | `docs/screenshots/05-detail.png` |
-| 6 | 明暗主题切换效果 | `docs/screenshots/06-theme.png` |
-| 7 | Swagger UI 接口文档（<http://localhost:8081/swagger-ui.html>） | `docs/screenshots/07-swagger.png` |
-| 8 | ApiFox 接口调试界面（导入 `docs/apifox-import.json` 后） | `docs/screenshots/08-apifox.png` |
+| 1 | 首页（KPI + 评分分布 + 年度趋势 + 热榜速览） | `docs/screenshots/01-home.png` |
+| 2 | 综合热榜（豆瓣式排行榜卡片：封面/主演/梗概） | `docs/screenshots/02-rank-overall.png` |
+| 3 | 分地区 / 分年代 / 分类型榜单 | `docs/screenshots/03-rank-dimension.png` |
+| 4 | 类型对比雷达图 | `docs/screenshots/04-radar.png` |
+| 5 | 作品详情弹窗（封面 + 同档期对比小图） | `docs/screenshots/05-detail.png` |
+| 6 | 影片库表格（每页 10 条） | `docs/screenshots/06-library.png` |
+| 7 | 明暗主题切换效果 | `docs/screenshots/07-theme.png` |
+| 8 | Swagger UI 接口文档（<http://localhost:8081/swagger-ui.html>） | `docs/screenshots/08-swagger.png` |
 | 9 | MySQL Workbench 数据量验证（`SELECT COUNT(*) FROM movies` = 850） | `docs/screenshots/09-mysql.png` |
 
 ![看板整体效果占位](docs/screenshots/01-overview.png)
@@ -34,21 +36,35 @@
 
 电影投资决策长期依赖经验判断，缺少直观的数据支撑。本项目以公开电影数据为基础，围绕「地域文化」「类型×档期」「投入产出」「人才图谱」「评分画像」五个维度，构建面向电影产业链的数据洞察看板。
 
-### 核心功能（对照课程要求 F1-F9）
+### 页面结构（左侧多级菜单，点击切换，共 8 个页面）
+
+| 菜单 | 页面 | 内容 |
+|------|------|------|
+| 🏠 首页 | 首页 | 4 个 KPI 卡片 + F5 评分分布直方图 + F6 年度趋势 + F7 综合热榜速览（TOP 5） |
+| 🔥 热度排行 ▸ | 综合热榜 | F7 完整榜单 TOP 20，一键切换「按评分 / 按评价人数」 |
+| | 分地区 | 11 个地区 chips 筛选，查看该地区口碑最佳影片 |
+| | 分年代 | 1995-1999 / 2000-2004 / … / 2020-2025 六个年代档 |
+| | 分类型 | 14 种类型 chips 筛选 |
+| 📊 数据洞察 ▸ | 类型对比 | F8 柱状图 / 雷达图双视图（数量、评分、票房三维度） |
+| | 深度分析 | 成本-票房散点、地区×类型热力、档期分析、导演 TOP N（滚动懒渲染） |
+| 🎬 影片库 | 影片库 | F9 全局筛选（类型/年份/评分/关键词）+ 表格/卡片双视图 + 每页 10 条 |
+
+> 影片库的筛选条件是**全局**的：同时作用于 F9 表格与全站图表（课程里程碑"图表随筛选刷新"）。
+
+### 课程要求功能对照（F1-F9）
 
 | 编号 | 功能 | 实现 |
 |------|------|------|
-| F1 | 看板首页 | 顶部标题区 + 筛选区 + 图表展示区，三段式单页布局 |
-| F2 | 类型筛选 | 类型下拉框（14 种类型，来自 `GET /api/types`） |
-| F3 | 年份区间筛选 | 起止年份输入，与 KPI/图表/列表全联动 |
-| F4 | 评分筛选 | 快捷区间（9+ / 8-9 / 7-8 / 6-7 / 6以下）+ 自定义区间，可点击直方图评分段反向筛选 |
-| F5 | 评分分布直方图 | 0.5 分粒度 16 个评分段，峰值段高亮，点击即筛选 |
-| F6 | 年度趋势折线图 | 平均评分折线为主视觉 + 电影数量柱状背景，点击柱子按年份筛选 |
-| F7 | 热门 TOP10 | 横向柱状图，一键切换「按评分 / 按评价人数」，点击查看详情 |
-| F8 | 类型对比 | 柱状图 / 雷达图一键切换（评分、数量、票房三维度） |
-| F9 | 作品详情表格 | 表格 / 卡片双视图，每页 10 条，列：标题、导演、类型、评分、评价人数、年份；点击看详情 |
-| 拓展 | 深度分析 | 成本-票房散点、地区×类型热力、档期分析、导演 TOP N + 成本效益 / 地域文化桑基图（懒渲染） |
-| 拓展 | 体验细节 | 明暗主题、图表点击联动筛选、localStorage 缓存、请求超时与取消、空数据友好占位 |
+| F1 | 看板首页 | 左侧多级菜单 + 右侧内容区，按页面切换，无需长页滚动 |
+| F2 | 类型筛选 | 类型下拉框（14 种，来自 `GET /api/types`） |
+| F3 | 年份区间筛选 | 起止年份输入，全站图表与表格联动 |
+| F4 | 评分筛选 | 自定义评分区间（配合影片库筛选条） |
+| F5 | 评分分布直方图 | 0.5 分粒度 16 个评分段，峰值段高亮，点击柱体按该段筛选 |
+| F6 | 年度趋势折线图 | 平均评分折线为主视觉 + 影片数量柱状背景 |
+| F7 | 热门 TOP10 | **豆瓣式排行榜卡片**：封面、排名、标题、年份、导演、主演、梗概；综合/分地区/分年代/分类型四个维度，按评分/按评价人数两种口径 |
+| F8 | 类型对比 | 柱状图 / 雷达图一键切换 |
+| F9 | 作品详情表格 | 表格/卡片双视图，每页 10 条，点击行看详情（含同档期对比迷你图） |
+| 体验 | — | 明暗主题、封面渐变由标题哈希生成（离线可用）、空数据友好占位、请求取消与去重 |
 
 ---
 
@@ -58,7 +74,7 @@
 |------|---------|---------|
 | 后端 | Java 17 · Spring Boot 3.2.5 · Spring Data JPA · MySQL Connector/J 8.3 · OpenCSV | 分层架构清晰、JPA 自动生成查询、内置连接池与 CORS；OpenCSV 用于启动时加载初始数据 |
 | 数据库 | MySQL 8.0 | 真实持久化关系库，支持复杂 JOIN 与索引优化，可现场演示数据真实性 |
-| 前端 | 原生 HTML5 + CSS3 + ES6 JavaScript（**无 Vue/React/axios/构建工具**） | 课程硬性要求；用 IIFE 模块化 + CSS 变量保证工程质量 |
+| 前端 | 原生 HTML5 + CSS3 + ES6 JavaScript（**无 Vue/React/axios/构建工具**） | 课程硬性要求；用 IIFE 模块化 + CSS 变量保证工程质量；界面参考哔哩哔哩网页版（左侧多级菜单 + 卡片式内容） |
 | 图表 | Apache ECharts 5.5.0（**本地 vendor 化** + 多 CDN 兜底） | 中文文档完善，支持双轴、热力、散点、桑基等全部所需图表；本地化后断网/被墙也能正常渲染 |
 | HTTP 调用 | 原生 Fetch API（自封装 `api.js`） | 统一超时 8s、缓存、错误校验，替代 axios |
 | 部署 | Nginx 1.26.2（Windows） | 静态托管 + `/api/` 反向代理（同源无跨域）+ 静态资源缓存 |
@@ -113,15 +129,16 @@ movie-dashboard/
 │   │   ├── index.html             # 单页应用入口
 │   │   ├── css/style.css          # 明暗主题 + CSS Grid 布局
 │   │   ├── vendor/echarts.min.js  # ECharts 5.5.0 本地副本（离线可用，不受 CDN 屏蔽影响）
-│   │   └── js/                    # 21 个 JS 文件：config + theme + chart-config + loader + main + utils(3) + charts(10) + works-table
+│   │   └── js/                    # 19 个 JS 文件：config + theme + chart-config + loader + main + ranking + works-table + utils(3) + charts(8)
 │   │       ├── config.js          # 全局配置（API_BASE 为空串，走 Nginx 同源代理）
-│   │       ├── theme.js           # 设计令牌：CSS 变量 + ECharts 主题（app-light / app-dark）同源
-│   │       ├── chart-config.js    # 图表声明表：新增图表只加一行
+│   │       ├── theme.js           # 设计令牌：CSS 变量 + ECharts 主题（app-light / app-dark）同源，B 站粉色板
+│   │       ├── chart-config.js    # 图表声明表：新增图表只加一行（含所属页面 page 字段）
 │   │       ├── echarts-loader.js  # ECharts 加载器：本地优先，失败自动回退多个 CDN
-│   │       ├── main.js            # 入口：初始化、事件绑定、数据转换层、调度注册中心
+│   │       ├── main.js            # 主入口：菜单路由 + 各页面数据加载 + 筛选状态
+│   │       ├── ranking.js         # 豆瓣式排行榜卡片（封面/排名/导演/主演/梗概）
 │   │       ├── works-table.js     # F9 作品表格/卡片渲染（每页 10 条）
 │   │       ├── utils/             # api.js(fetch封装+去重+取消) / debounce.js / ui.js
-│   │       └── charts/            # registry.js(注册中心) + 10 个 ECharts 图表模块
+│   │       └── charts/            # registry.js(注册中心，按页面渲染) + 7 个 ECharts 图表模块
 │   └── nginx-1.26.2/              # 组长本机的 Nginx（二进制，.gitignore 排除；组员需自行下载）
 ├── scripts/                       # 数据脚本（Python）与前端自测脚本
 │   ├── generate_data.py           # 数据生成器（种子 42，可复现）

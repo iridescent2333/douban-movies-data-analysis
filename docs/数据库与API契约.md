@@ -164,7 +164,8 @@ GET /api/works?type=科幻&yearStart=2015&yearEnd=2025&ratingMin=8&title=星际&
         "id": 3080, "title": "冷酷的谎言往事", "director": "Satyajit Ray",
         "leadActor": "Hrithik Roshan; Scarlett Johansson", "country": "德国",
         "year": 2016, "duration": 123, "rating": 9.8, "voteCount": 38616,
-        "posterUrl": "", "genres": ["动画", "Cult", "文艺"]
+        "posterUrl": "", "intro": "当和平时期来临，一位退休的老兵必须面对人性深处的挣扎……",
+        "genres": ["动画", "Cult", "文艺"]
       }
     ],
     "totalElements": 850, "totalPages": 85, "number": 0, "size": 10,
@@ -223,16 +224,22 @@ GET /api/works/stats?type=科幻&yearStart=2015
 ### 4.5 A5 热门作品 TOP N
 
 ```
-GET /api/works/top?n=10&by=rating
+GET /api/works/top?n=20&by=rating&country=美国&yearStart=2010&yearEnd=2014&type=科幻
 ```
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| n | Integer | ❌ | 返回条数，默认 10 |
+| n | Integer | ❌ | 返回条数，默认 10（前端榜单传 20） |
 | by | String | ❌ | `rating` 按评分降序（默认）/ `votes` 按评价人数降序 |
-| 其他 | — | ❌ | 同 A2 的筛选参数 |
+| type | String | ❌ | 类型（分类型榜单用） |
+| country | String | ❌ | 国家/地区（分地区榜单用） |
+| yearStart / yearEnd | Integer | ❌ | 年份区间（分年代榜单用） |
+| ratingMin / ratingMax / title | — | ❌ | 同 A2 的筛选参数 |
 
-**响应**：`MovieDTO` 数组（字段同 A2 列表项）。
+**响应**：`MovieDTO` 数组（字段同 A2 列表项，**含 `intro` 故事梗概**，供排行榜卡片展示）。
+
+> 前端四个榜单页面对应该接口的不同参数组合：
+> 综合热榜（无筛选）、分地区（`country`）、分年代（`yearStart/yearEnd`）、分类型（`type`）。
 
 ---
 
