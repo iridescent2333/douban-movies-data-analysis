@@ -282,6 +282,33 @@ body.dark .chart-body.loading::after { background: rgba(0,0,0,0.3); }
   font-size: 13px;
 }
 
+/* 图表区域错误态：ECharts 未加载 / 渲染异常时给出明确提示，而不是永远停在"加载中..." */
+.chart-body.error::after {
+  content: "图表加载失败，请检查 vendor/echarts.min.js 或网络";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e04040;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  text-align: center;
+  padding: 0 16px;
+}
+body.dark .chart-body.error::after { background: rgba(0, 0, 0, 0.45); color: #ff7a7a; }
+
+/* 列表占位（加载中 / 空 / 失败） */
+.list-placeholder {
+  grid-column: 1 / -1;
+  padding: 40px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.list-placeholder.error { color: #e04040; }
+body.dark .list-placeholder.error { color: #ff7a7a; }
+
 /* ============================================================
  * Tab 切换面板
  * ============================================================ */
