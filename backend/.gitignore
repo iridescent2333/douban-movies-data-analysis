@@ -8,8 +8,8 @@ target/
 .vscode/
 *.class
 
-# H2 数据库文件（持久化数据，但不纳入版本控制）
-data/
+# H2 数据库文件（历史遗留；注意：src/main/resources/data/ 是种子数据 CSV，必须提交！）
+/data/
 
 # 系统文件
 .DS_Store
