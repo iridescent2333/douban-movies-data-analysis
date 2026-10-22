@@ -377,6 +377,42 @@ GET /api/stats/top-directors?n=10
 }
 ```
 
+### 4.10 看板聚合（一次请求返回整屏数据）★ 前端首屏与筛选都走这个
+
+```
+GET /api/stats/overview?n=20&yearStart=2015&yearEnd=2025&country=美国
+```
+
+**Query 参数**：与其它 stats 接口相同的筛选参数（`yearStart` / `yearEnd` / `genres` / `country` / `ratingMin` / `ratingMax`），外加 `n`（导演榜条数，默认 10）。
+
+**响应**
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "kpi": {
+      "movieCount": 850,
+      "avgRating": 7.18,
+      "yearMin": 1995,
+      "yearMax": 2025,
+      "countryCount": 10
+    },
+    "yearTrend":     [ { "year": 1995, "count": 34, "avgRating": 6.94, "avgBoxOffice": 129978056.79 } ],
+    "genreCompare":  [ { "genre": "剧情", "avgRating": 7.31, "avgBoxOffice": 5100.00, "count": 135 } ],
+    "scatterCostBox":[ { "budgetWan": 16500.00, "boxOfficeWan": 83500.00, "rating": 9.4, "title": "盗梦空间", "country": "美国" } ],
+    "heatmap":       [ { "country": "美国", "genre": "科幻", "avgRating": 7.55, "count": 45 } ],
+    "seasonAnalysis":[ { "seasonTag": "暑期档", "genre": "动画", "avgBoxOffice": 12500.00, "avgRating": 7.82, "count": 28 } ],
+    "topDirectors":  [ { "director": "Christopher Nolan", "count": 12, "avgRating": 8.45 } ]
+  }
+}
+```
+
+> 六个数组的字段与各自的独立接口 **完全一致**，前端的数据转换层可直接复用。
+> 设计意图：后端只查一次 `movies` + 一次 `movie_financials`，6 类图表基于同一份数据在内存里算出，
+> 把"6 次全表查询 + 6 次网络往返"压缩成"1 次查询 + 1 次往返"（实测 2725ms → 600ms）。
+
 ---
 
 ## 五、分页参数约定

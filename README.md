@@ -49,7 +49,7 @@
 | 后端 | Java 17 · Spring Boot 3.2.5 · Spring Data JPA · MySQL Connector/J 8.3 · OpenCSV | 分层架构清晰、JPA 自动生成查询、内置连接池与 CORS；OpenCSV 用于启动时加载初始数据 |
 | 数据库 | MySQL 8.0 | 真实持久化关系库，支持复杂 JOIN 与索引优化，可现场演示数据真实性 |
 | 前端 | 原生 HTML5 + CSS3 + ES6 JavaScript（**无 Vue/React/axios/构建工具**） | 课程硬性要求；用 IIFE 模块化 + CSS 变量保证工程质量 |
-| 图表 | Apache ECharts 5.5.0（CDN 引入） | 中文文档完善，支持双轴、热力、散点、桑基等全部所需图表 |
+| 图表 | Apache ECharts 5.5.0（**本地 vendor 化** + 多 CDN 兜底） | 中文文档完善，支持双轴、热力、散点、桑基等全部所需图表；本地化后断网/被墙也能正常渲染 |
 | HTTP 调用 | 原生 Fetch API（自封装 `api.js`） | 统一超时 8s、缓存、错误校验，替代 axios |
 | 部署 | Nginx 1.26.2（Windows） | 静态托管 + `/api/` 反向代理（同源无跨域）+ 静态资源缓存 |
 | 接口管理 | ApiFox（导入 OpenAPI 3.0 JSON） | 替代 Swagger UI，适合团队协作与自动化调试 |
@@ -98,16 +98,21 @@ movie-dashboard/
 │   ├── dist/                     # 【前端】Nginx 部署根目录
 │   │   ├── index.html             # 单页应用入口
 │   │   ├── css/style.css          # 明暗主题 + CSS Grid 布局
-│   │   └── js/                    # 13 个 JS 文件：config + main + utils(3) + charts(8)
+│   │   ├── vendor/echarts.min.js  # ECharts 5.5.0 本地副本（离线可用，不受 CDN 屏蔽影响）
+│   │   └── js/                    # 19 个 JS 文件：config + theme + chart-config + loader + main + utils(3) + charts(9)
 │   │       ├── config.js          # 全局配置（API_BASE 为空串，走 Nginx 同源代理）
-│   │       ├── main.js            # 入口：初始化、事件绑定、数据转换层、图表调度
-│   │       ├── utils/             # api.js(fetch封装+缓存) / debounce.js / ui.js
-│   │       └── charts/            # 8 个 ECharts 图表模块（挂 window.Charts）
+│   │       ├── theme.js           # 设计令牌：CSS 变量 + ECharts 主题（app-light / app-dark）同源
+│   │       ├── chart-config.js    # 图表声明表：新增图表只加一行
+│   │       ├── echarts-loader.js  # ECharts 加载器：本地优先，失败自动回退多个 CDN
+│   │       ├── main.js            # 入口：初始化、事件绑定、数据转换层、调度注册中心
+│   │       ├── utils/             # api.js(fetch封装+去重+取消) / debounce.js / ui.js
+│   │       └── charts/            # registry.js(注册中心) + 8 个 ECharts 图表模块
 │   └── nginx-1.26.2/              # 组长本机的 Nginx（二进制，.gitignore 排除；组员需自行下载）
-├── scripts/                       # 数据脚本（Python）
+├── scripts/                       # 数据脚本（Python）与前端自测脚本
 │   ├── generate_data.py           # 数据生成器（种子 42，可复现）
 │   ├── convert_to_normalized.py   # CSV → 规范化 SQL（H2 时代产物，保留备查）
 │   ├── init_h2_sql.py             # 同上（H2 时代遗留，待清理）
+│   ├── frontend-smoke-test.js     # 前端冒烟测试：node scripts/frontend-smoke-test.js
 │   ├── requirements.txt           # Python 依赖清单
 │   └── movies.csv                 # 生成的数据副本（与后端 classpath 内 CSV 同源）
 ├── CONTRIBUTING.md                # 贡献指南入口（PR/Issue 时 GitHub 自动提示）
@@ -225,6 +230,23 @@ ApiFox → 新建项目 → 导入 → OpenAPI/Swagger → 选 `docs/apifox-impo
 
 ---
 
+## ⚡ 性能与体验优化（2026-10 改造）
+
+| 优化点 | 做法 | 实测效果 |
+|--------|------|---------|
+| **图表库离线可用** | ECharts 5.5.0 本地化到 `frontend/dist/vendor/`，加载失败自动回退 4 个 CDN 镜像 | 断网/被墙也能渲染，不再整屏"加载中..." |
+| **1 次请求出整屏** | 新增 `/api/stats/overview`：后端只查一次 movies + 一次 financials，6 类图表在内存里基于同一份数据算出 | 整屏数据请求 **2725ms → 600ms**（约 4.5 倍） |
+| **响应压缩** | 后端开启 gzip（`server.compression`），Nginx 模板同时对静态资源开 gzip | overview 响应 **71KB → 14KB**（-80%） |
+| **Tab 懒渲染** | Tab 面板内 4 张图改为"切到才画" | 首屏少绘 4 张图，主线程更早可交互 |
+| **请求去重 + 取消陈旧响应** | `api.js` 记录进行中的请求；连续筛选时 abort 上一轮，避免旧数据覆盖新数据 | 快速调整筛选不再出现数据"闪回" |
+| **主题切换零请求** | 切换明暗主题只重绘图表，复用内存中的数据 | 主题切换不再触发 6 个接口 |
+| **列表渲染优化** | DocumentFragment 批量插入 + 事件委托 + HTML 转义 | 减少重排，标题含特殊字符也不会破坏结构 |
+| **UI 调优单一入口** | 页面 CSS 变量与 ECharts 主题同源于 `js/theme.js` | 改配色只动 1 个文件，8 个图表零改动 |
+
+> 前端自测：`node scripts/frontend-smoke-test.js`（无浏览器也能验证 8 张图表的 option 构建与调度逻辑）。
+
+---
+
 ## 📡 接口说明
 
 统一前缀 `/api`，统一响应格式 `{"code":0,"message":"ok","data":...}`（`code=0` 表示成功）。
@@ -240,6 +262,7 @@ ApiFox → 新建项目 → 导入 → OpenAPI/Swagger → 选 `docs/apifox-impo
 | 7 | GET | `/api/stats/heatmap` | 国家 × 类型评分热力矩阵 | 支持全部筛选参数 |
 | 8 | GET | `/api/stats/season-analysis` | 档期 × 类型交叉分析 | 支持全部筛选参数 |
 | 9 | GET | `/api/stats/top-directors` | 导演作品 TOP N | `n`（后端默认 10，前端传 20；当前不随其他筛选联动） |
+| 10 | GET | `/api/stats/overview` | **看板聚合接口**：一次返回 6 类图表数据 + KPI 汇总 | 支持全部筛选参数 + `n` |
 
 响应示例：
 
@@ -341,6 +364,9 @@ genres ──< movie_genres >── movies ──1:1── movie_financials
 | 改了 CSV 但数据没变 | DataInitializer 检测到表非空会跳过 | `TRUNCATE` movies 与 movie_financials 后重启 |
 | 筛选后数量没变化 | 前端 localStorage 缓存 5 分钟 | Ctrl+Shift+R 强刷或清缓存验证 |
 | ApiFox 导入失败 | JSON 格式问题 | `python -m json.tool docs/apifox-import.json` 校验 |
+| 图表全空白 + 控制台 `ERR_CONNECTION_RESET` | **旧版本**直接引 cdn.jsdelivr.net 的 ECharts，CDN 被墙导致 `window.echarts` 为空 | 现已把 ECharts 本地化到 `frontend/dist/vendor/echarts.min.js`；确认该文件存在（未被误删），并 **Ctrl+Shift+R 强刷** |
+| 改了前端代码但页面没变化 | Nginx 对 js/css 设了 7 天强缓存 | Ctrl+Shift+R 强刷；或 `.\nginx.exe -s reload` |
+| 调后端时提示"聚合接口不可用" | 前后端版本不匹配（后端未重启到新版） | 重启后端即可；前端会自动降级为旧的 6 接口模式，功能不受影响 |
 | 组员 clone 后启动无数据 | 正常，首次启动会加载 CSV | 等控制台出现 `[DataInit] 加载完成！` |
 | 组员 clone 后没有 nginx 目录 | 正常，二进制被 .gitignore 排除 | 自行下载 Nginx，按 `docs/快速上手.md` Step 3 配置 |
 
