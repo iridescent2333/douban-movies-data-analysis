@@ -79,7 +79,7 @@
 | HTTP 调用 | 原生 Fetch API（自封装 `api.js`） | 统一超时 8s、缓存、错误校验，替代 axios |
 | 部署 | Nginx 1.26.2（Windows） | 静态托管 + `/api/` 反向代理（同源无跨域）+ 静态资源缓存 |
 | 接口管理 | SpringDoc（Swagger UI，OpenAPI 自动生成）+ ApiFox（导入 `docs/apifox-import.json`） | 课程要求「API 文档自动生成」；ApiFox 便于团队协作联调 |
-| 数据处理 | Python 3（pandas / requests） | 数据生成与清洗，随机种子固定保证可复现 |
+| 数据处理 | Python 3 | 数据集清洗转换（`scripts/build_dataset.py`，规则可复现） |
 
 ---
 
@@ -123,7 +123,7 @@ movie-dashboard/
 │           ├── application.yml                     # 主配置（环境变量占位，无真实凭据）
 │           ├── application-local.yml.example       # 本地配置模板 → 复制为 application-local.yml
 │           ├── schema.sql                          # 建表 DDL（4 张表）
-│           └── data/movies.csv                     # 850 条初始数据（启动时加载）
+│           └── data/movies.csv                     # 2050 条真实豆瓣数据（启动时自动导入 MySQL）
 ├── frontend/
 │   ├── dist/                     # 【前端】Nginx 部署根目录
 │   │   ├── index.html             # 单页应用入口
@@ -141,7 +141,7 @@ movie-dashboard/
 │   │       └── charts/            # registry.js(注册中心，按页面渲染) + 7 个 ECharts 图表模块
 │   └── nginx-1.26.2/              # 组长本机的 Nginx（二进制，.gitignore 排除；组员需自行下载）
 ├── scripts/                       # 数据脚本（Python）与前端自测脚本
-│   ├── generate_data.py           # 数据生成器（种子 42，可复现）
+│   ├── build_dataset.py           # 真实豆瓣数据集清洗转换（Kaggle CSV → movies.csv）
 │   ├── convert_to_normalized.py   # CSV → 规范化 SQL（H2 时代产物，保留备查）
 │   ├── init_h2_sql.py             # 同上（H2 时代遗留，待清理）
 │   ├── frontend-smoke-test.js     # 前端冒烟测试：node scripts/frontend-smoke-test.js
@@ -222,7 +222,7 @@ mvnw.cmd spring-boot:run          # Windows
 # 或 IDEA：打开 MovieDashboardApplication.java → 右键 Run
 ```
 
-首次启动会依次完成：Hibernate 自动建 4 张表 → DataInitializer 从 `movies.csv` 加载 850 条数据 → 监听 **8081** 端口。
+首次启动会依次完成：Hibernate 自动建表 → DataInitializer 从 `movies.csv` 把 2050 条真实豆瓣数据写入 MySQL → 监听 **8081** 端口。
 
 成功标志（控制台）：
 
@@ -233,7 +233,11 @@ Started MovieDashboardApplication in x seconds
 ```
 
 > 后续重启若表中已有数据则跳过加载。想重新加载：先执行
-> `TRUNCATE TABLE movie_dashboard.movies; TRUNCATE TABLE movie_dashboard.movie_financials;` 再重启。
+> ```sql
+> SET FOREIGN_KEY_CHECKS=0;
+> TRUNCATE TABLE movie_genres; TRUNCATE TABLE genres; TRUNCATE TABLE movies;
+> SET FOREIGN_KEY_CHECKS=1;
+> ``` 再重启（自动重新导入 2050 条真实数据）。
 
 ### Step 3 · 配置并启动 Nginx
 
@@ -319,7 +323,7 @@ ApiFox → 新建项目 → 导入 → OpenAPI/Swagger → 选 `docs/apifox-impo
 }
 ```
 
-> 分页字段遵循 Spring Data 约定：`content` / `totalElements` / `totalPages`，`page` **从 0 开始**
+> 分页字段遵循课程要求统一格式：`page` / `size` / `total` / `records`，`page` **从 0 开始**
 > （前端页码从 1 起，由 `main.js` 做换算）。
 > 完整契约与更多示例见 [`docs/数据库与API契约.md`](docs/数据库与API契约.md)；
 > 在线调试用 **Swagger UI**：<http://localhost:8081/swagger-ui.html>（或用 ApiFox 导入 `docs/apifox-import.json`）。
@@ -328,42 +332,44 @@ ApiFox → 新建项目 → 导入 → OpenAPI/Swagger → 选 `docs/apifox-impo
 
 ## 📊 数据来源与数据模型
 
-### 数据来源
+### 数据来源（真实数据，可溯源）
 
 | 项 | 说明 |
 |----|------|
-| 主方案 | Kaggle TMDB 公开电影数据集（含预算/票房/评分字段） |
-| 备选 | Python 爬虫抓取豆瓣公开榜单（遵守 robots） |
-| 当前数据 | 由 `scripts/generate_data.py` 确定性生成（`random.seed(42)`），任意机器结果一致 |
-| 入库方式 | CSV → Python 清洗 → `DataInitializer` 经 JPA 写入 MySQL（**非静态文件直读**） |
+| 数据集 | [Kaggle: Douban Movies Dataset](https://www.kaggle.com/datasets/dengfuping/douban-movies-dataset)（**CC0 公有领域**） |
+| 镜像仓库 | [github.com/dengfuping/douban-movies-spider](https://github.com/dengfuping/douban-movies-spider) |
+| 合规性 | 使用公开数据集，**不写爬虫访问豆瓣**，规避 robots 协议风险 |
+| 真实性 | 全部为豆瓣真实电影（肖申克的救赎 9.7/322万人、霸王别姬 9.6/238万人…），主键 = 豆瓣 subject id，可溯源 |
+| 转换脚本 | `python3 scripts/build_dataset.py`（清洗 + 规则映射，规则见 `docs/数据说明.md`） |
+| 入库方式 | CSV → DataInitializer 经 JPA 写入 MySQL（**非前端静态文件直读**） |
+| 海报 | 数据库存豆瓣真实 poster_url；因豆瓣 CDN 防盗链（校验 Referer），前端经后端代理 `/api/works/{id}/poster` 加载 |
 
-### 数据规模
+### 数据规模（2050 条真实数据实测）
 
 | 指标 | 数值 |
 |------|------|
-| 电影总数 | **850** 条 |
-| 年份跨度 | 1995 – 2025（31 年） |
-| 类型数 | **14** 种（剧情/喜剧/爱情/动画/科幻/悬疑/恐怖/动作/战争/文艺/主旋律/纪录片/短片/Cult） |
-| 国家/地区 | **10** 个（中国大陆、中国香港、中国台湾、美国、日本、韩国、印度、英国、法国、德国） |
-| 财务数据 | 850 条财务记录（每部电影一条），其中 **418 条**含预算+票房数值 |
-| 评分分布 | 正态 N(7.0, 1.2)，截断至 2.0–9.8 |
+| 电影总数 | **2050** 条（课程要求 ≥500） |
+| 年份跨度 | 1931 – 2026 |
+| 类型数 | **28** 种（剧情 1100 / 动作 616 / 喜剧 597 / 爱情 429…） |
+| 制片地区 | 日本 / 美国 / 中国大陆 / 中国香港 / 法国 / 韩国 等 |
+| 评分分布 | 峰值 8.0–8.5 分（345 部），范围 2.7–9.7 |
+| 海报 URL 覆盖率 | **100%** |
+| 简介覆盖率 | 99%+ |
 
-### 数据模型（4 张表，满足第三范式）
+### 数据模型（3 张表，满足第三范式）
 
 ```
-genres ──< movie_genres >── movies ──1:1── movie_financials
+genres ──< movie_genres >── movies
 ```
 
 | 表名 | 职责 | 关键字段 |
 |------|------|---------|
-| `movies` | 电影主表 | id, title, director, lead_actor, country, release_year, duration, rating, vote_count, intro, poster_url |
+| `movies` | 电影主表（主键=豆瓣 subject id） | id, title, director, lead_actor, country, release_year, release_date, season_tag, duration, rating, vote_count, intro, poster_url, link |
 | `genres` | 类型字典表 | id, name（唯一） |
 | `movie_genres` | 电影-类型多对多关联 | movie_id, genre_id（联合主键） |
-| `movie_financials` | 财务信息（稀疏字段独立成表） | movie_id（主键）, budget_wan, box_office_wan, release_date, season_tag |
 
-> 设计要点：类型拆分 + 关联表满足 3NF 原子性；财务字段稀疏故独立建表以避免大量 NULL；
-> 年份列名实际为 `release_year`（避开 SQL 保留字 `YEAR`）。
-> 详见 [`docs/代码说明.md`](docs/代码说明.md) 与 [`docs/数据库与API契约.md`](docs/数据库与API契约.md)。
+> 设计要点：类型拆分 + 关联表满足 3NF；公开数据集无真实预算/票房，
+> 故不设财务表、不做票房类统计（禁止编造数据）；档期由真实上映日期的月份映射。
 
 ---
 
@@ -403,7 +409,7 @@ genres ──< movie_genres >── movies ──1:1── movie_financials
 | 页面 404 且样式全丢 | nginx.conf 的 `root` 路径不对 | 改成本机 `frontend/dist` 绝对路径（正斜杠）后 `nginx.exe -s reload` |
 | Nginx 启动失败 | 8083 端口被占用（团队约定端口，原 80 常被 IIS / 旧 nginx 占） | `netstat -ano \| findstr :8083` 查 PID → `taskkill /F /PID xxx`，或再换一个 `listen` 端口并同步本文档 |
 | IDEA Run 报 `Port 8081 already in use` | 旧进程没关 | `netstat -ano \| findstr :8081` → `taskkill /F /PID xxx` |
-| 改了 CSV 但数据没变 | DataInitializer 检测到表非空会跳过 | `TRUNCATE` movies 与 movie_financials 后重启 |
+| 改了 CSV 但数据没变 | DataInitializer 检测到表非空会跳过 | 执行 `docs/数据说明.md` 第二节的重置 SQL 后重启 |
 | 筛选后数量没变化 | 前端 localStorage 缓存 5 分钟 | Ctrl+Shift+R 强刷或清缓存验证 |
 | ApiFox 导入失败 | JSON 格式问题 | `python -m json.tool docs/apifox-import.json` 校验 |
 | 图表全空白 + 控制台 `ERR_CONNECTION_RESET` | **旧版本**直接引 cdn.jsdelivr.net 的 ECharts，CDN 被墙导致 `window.echarts` 为空 | 现已把 ECharts 本地化到 `frontend/dist/vendor/echarts.min.js`；确认该文件存在（未被误删），并 **Ctrl+Shift+R 强刷** |

@@ -88,7 +88,7 @@
       if (body && (body.code === 0 || body.code === 200)) {
         return body.data;
       }
-      throw new Error((body && body.message) || '接口返回异常（业务码非 0）');
+      throw new Error((body && (body.msg || body.message)) || '接口返回异常（业务码非 0）');
     }).catch(function (err) {
       // 全局 toast 提示（取消请求不提示，避免筛选时的噪音；
       // options.silent 可关闭提示，用于"接口缺失自动降级"这类可预期错误）

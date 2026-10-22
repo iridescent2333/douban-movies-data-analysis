@@ -297,6 +297,86 @@ a:hover { color: var(--primary-hover); }
 .page-desc { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
 
 /* ============================================================
+ * 首页布局：左侧筛选面板（F1）+ 右侧图表区
+ * ============================================================ */
+.home-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.filter-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  position: sticky;
+  top: calc(var(--topbar-h) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.filter-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  padding-left: 8px;
+  border-left: 3px solid var(--primary);
+  line-height: 1.2;
+}
+.filter-block { display: flex; flex-direction: column; gap: 5px; }
+.filter-block > label { font-size: 12px; color: var(--text-muted); }
+.filter-block select,
+.filter-block input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+  transition: border-color var(--transition);
+}
+.filter-block select:focus,
+.filter-block input:focus { border-color: var(--primary); }
+.filter-panel .range-inputs { display: flex; gap: 4px; align-items: center; }
+.filter-panel .range-inputs span { color: var(--text-muted); }
+.filter-panel .btn-reset { width: 100%; }
+.filter-note { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+
+/* 详情弹窗：真实海报大图（加载失败露出渐变底 + 标题） */
+.detail-poster {
+  width: 180px;
+  height: 252px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+  color: #fff;
+}
+.detail-poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+.detail-poster::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+.detail-poster .cover-title,
+.detail-poster .cover-rating { z-index: 2; }
+
+/* ============================================================
  * KPI 卡片
  * ============================================================ */
 .kpi-grid {
@@ -443,7 +523,7 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
 .rank-no.top2 { color: #ff8f1f; }
 .rank-no.top3 { color: #f2c94c; }
 
-/* 封面（数据无真实海报图，用标题生成的确定性渐变占位，风格统一且离线可用） */
+/* 封面：优先显示后端代理的真实豆瓣海报（img），渐变作为加载兜底背景 */
 .rank-cover {
   width: 104px;
   height: 140px;
@@ -456,6 +536,35 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
   justify-content: flex-end;
   padding: 8px;
   color: #fff;
+}
+.rank-cover .rank-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+.rank-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+.rank-cover .cover-title,
+.rank-cover .cover-rating { z-index: 2; }
+
+/* F9 表格行的海报缩略图 */
+.col-poster { width: 44px; }
+.row-poster {
+  width: 32px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  background: var(--surface);
 }
 .rank-cover::after {
   content: "";

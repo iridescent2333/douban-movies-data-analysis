@@ -238,6 +238,9 @@
         toggle.querySelectorAll('.toggle-btn').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         rankState.overallBy = btn.dataset.by;
+        // 同步柱状图模块的口径（课程 F7 要求"按评分最高/评价人数最多"切换）
+        var barMod = global.Charts && global.Charts.topWorksBar;
+        if (barMod && barMod.setMode) barMod.setMode(btn.dataset.by);
         loadRanking('overall');
       });
     }
@@ -385,6 +388,10 @@
     Ranking.setLoading(containerId, '榜单加载中...');
     API.get('/api/works/top', params, { dedupe: false }).then(function (list) {
       Ranking.render(list, { containerId: containerId });
+      // 综合热榜页：同一份榜单数据同时喂给 F7 横向柱状图（取前 10）
+      if (dim === 'overall' && global.Charts && global.Charts.topWorksBar) {
+        global.Charts.topWorksBar.render(list);
+      }
     }).catch(function (err) {
       if (err && err.name === 'AbortError') return;
       Ranking.setLoading(containerId, '加载失败，请检查后端');
@@ -408,46 +415,139 @@
     var typeSel = document.getElementById('typeSelect');
     if (typeSel) typeSel.addEventListener('change', trigger);
 
-    var reset = document.getElementById('resetBtn');
-    if (reset) {
-      reset.addEventListener('click', function () {
-        ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax', 'titleSearch'].forEach(function (id) {
-          var el = document.getElementById(id);
-          if (el) el.value = '';
-        });
-        if (typeSel) typeSel.value = '';
+    // ---- F1 首页左侧筛选面板（与影片库共用 filterState，双向同步） ----
+    ['homeYearStart', 'homeYearEnd', 'ratingMin', 'ratingMax'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', trigger);
+    });
+    var homeTypeSel = document.getElementById('homeTypeSelect');
+    if (homeTypeSel) homeTypeSel.addEventListener('change', trigger);
+
+    // F4 评分快捷区间下拉：写入自定义区间输入框
+    var preset = document.getElementById('ratingPreset');
+    if (preset) {
+      preset.addEventListener('change', function () {
+        var v = preset.value;
+        if (v) {
+          var parts = v.split('-');
+          document.getElementById('ratingMin').value = parts[0] === '0' ? '' : parts[0];
+          document.getElementById('ratingMax').value = parts[1] === '10' ? '' : parts[1];
+        } else {
+          document.getElementById('ratingMin').value = '';
+          document.getElementById('ratingMax').value = '';
+        }
+        trigger();
+      });
+    }
+
+    var homeReset = document.getElementById('homeResetBtn');
+    if (homeReset) {
+      homeReset.addEventListener('click', function () {
+        resetFilterInputs();
         pageState.page = 1;
         refreshAll();
         UI.showToast('已重置筛选条件', 'success');
       });
     }
 
-    // 初始化类型下拉（A1）
+    var reset = document.getElementById('resetBtn');
+    if (reset) {
+      reset.addEventListener('click', function () {
+        resetFilterInputs();
+        pageState.page = 1;
+        refreshAll();
+        UI.showToast('已重置筛选条件', 'success');
+      });
+    }
+
+    // 初始化类型下拉（A1）——影片库与首页两处
     API.getWithCache('/api/types', null).then(function (types) {
-      if (!typeSel) return;
-      typeSel.innerHTML = '<option value="">全部类型</option>';
-      (types || []).forEach(function (t) {
-        var opt = document.createElement('option');
-        opt.value = t;
-        opt.textContent = t;
-        typeSel.appendChild(opt);
+      ['typeSelect', 'homeTypeSelect'].forEach(function (id) {
+        var sel = document.getElementById(id);
+        if (!sel) return;
+        sel.innerHTML = '<option value="">全部类型</option>';
+        (types || []).forEach(function (t) {
+          var opt = document.createElement('option');
+          opt.value = t;
+          opt.textContent = t;
+          sel.appendChild(opt);
+        });
       });
     }).catch(function () { /* 类型下拉失败不阻塞其它功能 */ });
   }
 
   function collectFilterState() {
-    var ys = document.getElementById('yearStart').value;
-    var ye = document.getElementById('yearEnd').value;
-    var rm = document.getElementById('ratingMin').value;
-    var rM = document.getElementById('ratingMax').value;
+    // 影片库与首页筛选面板共享同一份状态：两处输入取"非空优先"
     filterState = {
-      type: document.getElementById('typeSelect').value,
-      yearStart: ys ? +ys : null,
-      yearEnd: ye ? +ye : null,
-      ratingMin: rm ? +rm : null,
-      ratingMax: rM ? +rM : null,
-      title: document.getElementById('titleSearch').value.trim(),
+      type: pickValue('typeSelect', 'homeTypeSelect'),
+      yearStart: pickNumber('yearStart', 'homeYearStart'),
+      yearEnd: pickNumber('yearEnd', 'homeYearEnd'),
+      ratingMin: pickNumber('ratingMin', null),
+      ratingMax: pickNumber('ratingMax', null),
+      title: pickValue('titleSearch', null),
     };
+    // 把状态同步回另一处的控件，避免两面板显示不一致
+    syncFilterInputs();
+  }
+
+  /** 多个控件取第一个非空值 */
+  function pickValue() {
+    for (var i = 0; i < arguments.length; i++) {
+      var el = document.getElementById(arguments[i]);
+      if (el && el.value && el.value.trim() !== '') return el.value.trim();
+    }
+    return '';
+  }
+
+  function pickNumber() {
+    for (var i = 0; i < arguments.length; i++) {
+      var el = document.getElementById(arguments[i]);
+      if (el && el.value !== '') {
+        var n = +el.value;
+        if (!isNaN(n)) return n;
+      }
+    }
+    return null;
+  }
+
+  /** 把 filterState 回写到两处筛选控件（影片库 + 首页面板） */
+  function syncFilterInputs() {
+    var mapping = {
+      yearStart: filterState.yearStart, yearEnd: filterState.yearEnd,
+      ratingMin: filterState.ratingMin, ratingMax: filterState.ratingMax,
+    };
+    Object.keys(mapping).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && document.activeElement !== el) el.value = mapping[id] == null ? '' : mapping[id];
+    });
+    ['typeSelect', 'homeTypeSelect'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && document.activeElement !== el) el.value = filterState.type || '';
+    });
+    var ts = document.getElementById('titleSearch');
+    if (ts && document.activeElement !== ts) ts.value = filterState.title || '';
+    var preset = document.getElementById('ratingPreset');
+    if (preset && document.activeElement !== preset) {
+      var k = (filterState.ratingMin == null ? '' : filterState.ratingMin) + '-' +
+              (filterState.ratingMax == null ? '10' : filterState.ratingMax);
+      preset.value = /^(8-10|7-8|6-7|0-6)$/.test(k) ? k : '';
+    }
+  }
+
+  /** 清空两处筛选控件 */
+  function resetFilterInputs() {
+    ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax', 'homeYearStart', 'homeYearEnd', 'titleSearch']
+      .forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+    ['typeSelect', 'homeTypeSelect'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    var preset = document.getElementById('ratingPreset');
+    if (preset) preset.value = '';
+    filterState = { type: '', yearStart: null, yearEnd: null, ratingMin: null, ratingMax: null, title: '' };
   }
 
   function filterParams() {
@@ -506,8 +606,9 @@
       filterParams()
     );
     API.get('/api/works', params, { dedupe: false }).then(function (data) {
-      var list = (data && data.content) || [];
-      pageState.total = data && data.totalElements ? data.totalElements : list.length;
+      // 课程要求分页格式：data = { page, size, total, records }
+      var list = (data && data.records) || [];
+      pageState.total = data && data.total != null ? data.total : list.length;
       WorksTable.render(list, {
         page: pageState.page,
         totalPages: Math.max(1, Math.ceil(pageState.total / pageState.size)),
@@ -569,7 +670,7 @@
     var query = filterParams();
     return Promise.all([
       API.get('/api/works/stats', query, { dedupe: false }),
-      API.get('/api/stats/scatter-cost-box', query, { dedupe: false }).catch(function () { return []; }),
+      API.get('/api/stats/rating-votes-scatter', query, { dedupe: false }).catch(function () { return []; }),
       API.get('/api/stats/heatmap', query, { dedupe: false }).catch(function () { return []; }),
       API.get('/api/stats/season-analysis', query, { dedupe: false }).catch(function () { return []; }),
       API.get('/api/stats/top-directors', { n: CONFIG.TOP_N }, { dedupe: false }).catch(function () { return []; }),
@@ -634,12 +735,13 @@
 
   function transformScatter(list) {
     if (!list || !list.length) return [];
+    // 评分 × 热度散点（公开数据集无真实票房，改用两个真实维度）
     return list.map(function (d) {
       return {
         movie: d.title, title: d.title,
-        cost: d.budgetWan != null ? +d.budgetWan : 0,
-        boxOffice: d.boxOfficeWan != null ? +d.boxOfficeWan : 0,
-        rating: d.rating != null ? +d.rating : null,
+        id: d.id,
+        rating: d.rating != null ? +d.rating : 0,
+        votes: d.voteCount != null ? +d.voteCount : 0,
         genre: d.country,
       };
     });
@@ -664,7 +766,6 @@
       return {
         season: d.seasonTag || d.season,
         genre: d.genre,
-        avgBoxOffice: d.avgBoxOffice != null ? +d.avgBoxOffice : 0,
         avgRating: d.avgRating != null ? +d.avgRating : null,
         count: d.count,
       };
@@ -687,13 +788,16 @@
     var genres = (m.genres || []).join(' / ') || '-';
     var cast = m.leadActor || m.cast || m.actors || '-';
     if (Array.isArray(cast)) cast = cast.join(' / ');
-    var fin = m.financial || {};
+    // 海报：走后端代理（豆瓣 CDN 有防盗链，浏览器直连会被 418 拒绝），
+    // size=large 换豆瓣大图；加载失败时 onerror 回退到渐变封面，保证不出现裂图
     var coverBg = Ranking.coverBackground(m.title || '未命名');
     return '' +
       '<div class="modal-detail">' +
-        '<div class="detail-cover" style="background:' + coverBg + '">' +
+        '<div class="detail-poster" style="background:' + coverBg + '">' +
+          '<img src="' + CONFIG.API_BASE + '/api/works/' + m.id + '/poster?size=large" alt="' +
+            Ranking.escapeHtml(m.title || '') + '" referrerpolicy="no-referrer" ' +
+            'onerror="this.style.display=\'none\'">' +
           '<span class="cover-rating">' + (m.rating != null ? (+m.rating).toFixed(1) : '-') + '</span>' +
-          '<span class="cover-title">' + Ranking.escapeHtml(m.title || '未命名') + '</span>' +
         '</div>' +
         '<div class="detail-info">' +
           '<h3>' + Ranking.escapeHtml(m.title || '未命名') + '</h3>' +
@@ -704,9 +808,10 @@
           '<p><strong>国家/地区：</strong>' + Ranking.escapeHtml(m.country || '-') + '</p>' +
           '<p><strong>导演：</strong>' + Ranking.escapeHtml(m.director || '-') + '</p>' +
           '<p><strong>主演：</strong>' + Ranking.escapeHtml(String(cast).replace(/;\s*/g, ' / ')) + '</p>' +
-          (fin.budgetWan != null ? '<p><strong>成本：</strong>' + fin.budgetWan + ' 万</p>' : '') +
-          (fin.boxOfficeWan != null ? '<p><strong>票房：</strong>' + fin.boxOfficeWan + ' 万</p>' : '') +
-          (fin.seasonTag ? '<p><strong>档期：</strong>' + Ranking.escapeHtml(fin.seasonTag) + '</p>' : '') +
+          (m.releaseDate ? '<p><strong>上映日期：</strong>' + Ranking.escapeHtml(m.releaseDate) +
+            (m.seasonTag ? '（' + Ranking.escapeHtml(m.seasonTag) + '）' : '') + '</p>' : '') +
+          (m.duration ? '<p><strong>片长：</strong>' + m.duration + ' 分钟</p>' : '') +
+          (m.link ? '<p><a href="' + Ranking.escapeHtml(m.link) + '" target="_blank" rel="noopener">在豆瓣查看这条条目 ↗</a></p>' : '') +
           (m.intro ? '<p class="detail-intro">' + Ranking.escapeHtml(m.intro) + '</p>' : '') +
         '</div>' +
       '</div>' +

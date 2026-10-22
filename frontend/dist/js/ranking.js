@@ -87,9 +87,18 @@
         tagsHtml += '<span class="rank-tag blue">' + escapeHtml(m.country) + '</span>';
       }
 
+      // 海报优先走后端代理的真实豆瓣图（豆瓣 CDN 有防盗链，浏览器直连 418）；
+      // 图片加载失败（无海报/离线）时 onerror 隐藏 img，露出底层渐变占位，不裂图
+      var posterSrc = m.posterUrl
+        ? (global.APP_CONFIG.API_BASE + '/api/works/' + m.id + '/poster')
+        : '';
       item.innerHTML =
         '<div class="rank-no' + rankCls + '">' + rank + '</div>' +
         '<div class="rank-cover" style="background:' + coverBackground(title) + '">' +
+          (posterSrc
+            ? '<img class="rank-poster" src="' + posterSrc + '" alt="' + escapeHtml(title) + '" ' +
+              'loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">'
+            : '') +
           '<span class="cover-rating">' + (m.rating != null ? (+m.rating).toFixed(1) : '-') + '</span>' +
           '<span class="cover-title">' + escapeHtml(title) + '</span>' +
         '</div>' +

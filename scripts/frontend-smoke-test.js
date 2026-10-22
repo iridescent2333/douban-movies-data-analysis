@@ -97,9 +97,9 @@ function load(rel) {
 [
   'js/config.js', 'js/theme.js', 'js/chart-config.js', 'js/utils/debounce.js',
   'js/utils/api.js', 'js/utils/ui.js', 'js/charts/registry.js',
-  'js/charts/ratingDistribution.js', 'js/charts/yearTrend.js', 'js/charts/genreCompare.js',
-  'js/charts/scatterCostBox.js', 'js/charts/heatmap.js', 'js/charts/seasonAnalysis.js',
-  'js/charts/topDirectors.js', 'js/ranking.js', 'js/works-table.js',
+  'js/charts/ratingDistribution.js', 'js/charts/yearTrend.js', 'js/charts/topWorksBar.js',
+  'js/charts/genreCompare.js', 'js/charts/scatterCostBox.js', 'js/charts/heatmap.js',
+  'js/charts/seasonAnalysis.js', 'js/charts/topDirectors.js', 'js/ranking.js', 'js/works-table.js',
 ].forEach(load);
 
 let fail = 0;
@@ -114,7 +114,7 @@ check(UI_THEME.palette()[0] === '#FB7299', '主色为 B 站粉 #FB7299');
 
 /* ---------- 2. 7 个图表模块渲染 ---------- */
 console.log('[2] 7 个图表模块渲染');
-const scatter = [{ movie: 'A', title: 'A', cost: 1000, boxOffice: 5000, rating: 8.1, genre: '美国' }];
+const scatter = [{ movie: 'A', title: 'A', id: 1, rating: 8.1, votes: 500000, genre: '美国' }];
 const samples = {
   ratingDistribution: [
     { range: '6.0-6.5', count: 12, avgRating: 6.2 },
@@ -137,17 +137,21 @@ Object.keys(samples).forEach((key) => {
     check(false, `${key}: 渲染异常 -> ${e.message}`);
   }
 });
-check(!Charts.costBenefit && !Charts.regionCulture && !Charts.topWorks,
-  '成本效益 / 地域文化 / TOP10 柱状图已按需求移除');
+check(!Charts.costBenefit && !Charts.regionCulture,
+  '成本效益 / 地域文化图表已按需求移除');
+check(!!Charts.topWorksBar, 'F7 横向柱状图模块已回归（课程要求）');
 
 /* ---------- 3. 排行榜（豆瓣式卡片） ---------- */
 console.log('[3] 排行榜卡片渲染');
 const rankData = [
-  { id: 3080, title: '冷酷的谎言往事', year: 2016, rating: 9.8, voteCount: 38616, director: 'Satyajit Ray',
-    leadActor: 'Hrithik Roshan; Scarlett Johansson; 松隆子', genres: ['动画', 'Cult', '文艺'], country: '德国',
-    intro: '当和平时期来临，一位退休的老兵必须面对人性深处的挣扎，做出关乎成长与告别的抉择。' },
-  { id: 1, title: '测试影片', year: 2020, rating: 7.5, voteCount: 1000, director: '某导演',
-    leadActor: '甲; 乙', genres: ['剧情'], country: '美国', intro: '一部测试影片。' },
+  { id: 1292052, title: '肖申克的救赎', year: 1994, rating: 9.7, voteCount: 3225431, director: '弗兰克·德拉邦特',
+    leadActor: '蒂姆·罗宾斯; 摩根·弗里曼', genres: ['剧情', '犯罪'], country: '美国',
+    posterUrl: 'https://img3.doubanio.com/view/photo/s_ratio_poster/public/p480747492.webp',
+    intro: '一场谋杀案使银行家安迪蒙冤入狱，希望在监狱中生根发芽。' },
+  { id: 1291561, title: '千与千寻', year: 2019, rating: 9.4, voteCount: 2490528, director: '宫崎骏',
+    leadActor: '柊瑠美; 入野自由', genres: ['剧情', '动画'], country: '日本',
+    posterUrl: 'https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2557573348.webp',
+    intro: '千寻误入神灵世界，为拯救父母展开冒险。' },
 ];
 Ranking.render(rankData, { containerId: 'rankList-overall' });
 const box = registry['rankList-overall'];
@@ -155,13 +159,14 @@ const html = box.children.map(c => c.innerHTML).join('');
 check(box.children.length === 2, '渲染 2 张排行榜卡片');
 check(/class="rank-no top1"/.test(html), '第 1 名带 top1 高亮样式');
 check(/class="rank-cover" style="background:linear-gradient/.test(html), '封面使用生成的渐变背景');
-check(/cover-title/.test(html) && /冷酷的谎言往事/.test(html), '封面含影片标题');
-check(/cover-rating">9\.8/.test(html), '封面右上角显示评分');
-check(/导演：Satyajit Ray/.test(html), '信息区显示导演');
-check(/主演：Hrithik Roshan \/ Scarlett Johansson/.test(html), '主演用 / 分隔展示');
-check(/rank-intro/.test(html) && /人性深处的挣扎/.test(html), '展示故事梗概');
-check(/2016<\/b> 年/.test(html), '展示上映年份');
-check(/rank-tag/.test(html) && /德国/.test(html), '展示类型/地区标签');
+check(/cover-title/.test(html) && /肖申克的救赎/.test(html), '封面含影片标题');
+check(/cover-rating">9\.7/.test(html), '封面右上角显示评分');
+check(/导演：弗兰克·德拉邦特/.test(html), '信息区显示导演');
+check(/主演：蒂姆·罗宾斯 \/ 摩根·弗里曼/.test(html), '主演用 / 分隔展示');
+check(/rank-intro/.test(html) && /蒙冤入狱/.test(html), '展示故事梗概');
+check(/1994<\/b> 年/.test(html), '展示上映年份');
+check(/rank-tag/.test(html) && /美国/.test(html), '展示类型/地区标签');
+check(/class="rank-poster" src="[^"]*\/api\/works\/1292052\/poster"/.test(html), '封面走后端海报代理（真实豆瓣海报）');
 // 封面颜色确定性：同一标题两次生成一致
 check(Ranking.coverBackground('测试影片') === Ranking.coverBackground('测试影片'), '同一影片封面颜色恒定');
 // 空态

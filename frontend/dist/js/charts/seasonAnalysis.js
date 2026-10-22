@@ -1,8 +1,11 @@
 /**
- * seasonAnalysis.js —— Tab1 档期分析（气泡图）
- * X=档期, Y=类型, 气泡大小=平均票房, 颜色=平均评分
+ * seasonAnalysis.js —— 档期 × 类型 气泡图
+ * X=档期, Y=类型, 气泡大小=影片数量, 颜色=平均评分
  * 数据格式期望：
- *   [ { season: '春节档', genre: '喜剧', avgBoxOffice: 3200, avgRating: 7.4, count: 20 }, ... ]
+ *   [ { season: '暑期档', genre: '动画', avgRating: 7.4, count: 20 }, ... ]
+ *
+ * 说明：公开豆瓣数据集没有真实票房字段，气泡维度从"平均票房"改为"影片数量"，
+ *       档期由真实上映日期的月份映射（春季档/暑期档/秋季档/贺岁档），全部为真实数据。
  */
 (function (global) {
   'use strict';
@@ -37,11 +40,11 @@
       if (genres.indexOf(d.genre) === -1) genres.push(d.genre);
     });
 
-    // 气泡大小：按票房做归一化
-    var maxBO = Math.max.apply(null, data.map(function (d) { return d.avgBoxOffice || 0; }));
-    function boToSize(bo) {
-      if (!bo) return 8;
-      return 8 + (bo / Math.max(maxBO, 1)) * 40;
+    // 气泡大小：按影片数量归一化
+    var maxCount = Math.max.apply(null, data.map(function (d) { return d.count || 0; }));
+    function countToSize(c) {
+      if (!c) return 6;
+      return 6 + (c / Math.max(maxCount, 1)) * 38;
     }
 
     var scatterData = data.map(function (d) {
@@ -51,9 +54,8 @@
           seasons.indexOf(d.season),
           genres.indexOf(d.genre),
           d.avgRating,
-          d.avgBoxOffice,
+          d.count,
         ],
-        count: d.count,
       };
     });
 
@@ -62,9 +64,8 @@
         formatter: function (p) {
           var v = p.data.value;
           return '<b>' + p.data.name + '</b><br/>'
-            + '电影数：' + (p.data.count || '-') + '<br/>'
-            + '平均评分：' + (v[2] != null ? v[2].toFixed(2) : '-') + '<br/>'
-            + '平均票房：' + (v[3] != null ? v[3] + ' 万' : '-');
+            + '影片数量：' + (v[3] != null ? v[3] : '-') + ' 部<br/>'
+            + '平均评分：' + (v[2] != null ? v[2].toFixed(2) : '-');
         },
       },
       grid: { left: 70, right: 60, top: 30, bottom: 70 },
@@ -86,8 +87,9 @@
         orient: 'vertical',
         right: 10,
         top: 'center',
+        text: ['高分', '低分'],
         inRange: {
-          color: ['#e04040', '#f0a020', '#fb7299'],
+          color: ['#ffd6c2', '#ffb027', '#fb7299'],
         },
         textStyle: { fontSize: 11 },
       },
@@ -95,7 +97,7 @@
         name: '档期×类型',
         type: 'scatter',
         data: scatterData,
-        symbolSize: function (val) { return boToSize(val[3]); },
+        symbolSize: function (val) { return countToSize(val[3]); },
         itemStyle: {
           opacity: 0.75,
           borderColor: '#fff',

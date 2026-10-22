@@ -35,6 +35,14 @@
       transform: 'transformYearTrend',
       page: 'home',
     },
+    // ---- 热度排行 / 综合热榜（F7 横向柱状图，与海报榜单同数据源） ----
+    {
+      key: 'topWorksBar',
+      containerId: 'chartTopWorksBar',
+      source: '__ranking__',        // 特殊来源：数据由 main.js 的 loadRanking 直接喂入
+      page: 'rank-overall',
+      noOverview: true,             // 不从 overview 取数
+    },
     // ---- 数据洞察 / 类型对比（F8） ----
     {
       key: 'genreCompare',

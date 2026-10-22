@@ -56,6 +56,11 @@
     return defs.filter(function (def) { return (def.page || null) === (pageId || null); });
   }
 
+  /** noOverview 的图表（如 F7 柱状图）由外部直接喂数据，跳过 payload 渲染 */
+  function renderable(def) {
+    return !def.noOverview;
+  }
+
   /** 容器是否在视口内（隐藏页面 width=0，绘制会得到空图） */
   function isVisible(def) {
     var el = containerOf(def);
@@ -204,12 +209,12 @@
     }
     frameHandle = global.requestAnimationFrame(function () {
       frameHandle = null;
-      defsOfPage(lastPage).forEach(function (def) {
+      defsOfPage(lastPage).filter(renderable).forEach(function (def) {
         if (isLazy(def)) return;
         if (!isVisible(def)) return;
         renderOne(def, lastPayload);
       });
-      defsOfPage(lastPage).filter(isVisibilityLazy).forEach(function (def) {
+      defsOfPage(lastPage).filter(renderable).filter(isVisibilityLazy).forEach(function (def) {
         if (wasRendered[def.key]) renderOne(def, lastPayload);
       });
       observeVisibilityCharts();

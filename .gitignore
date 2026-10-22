@@ -20,7 +20,7 @@ backend/src/main/resources/application-local.yml
 
 # ---- 数据库本地文件 ----
 backend/data/
-data/
+/data-source/
 *.mv.db
 *.trace.db
 

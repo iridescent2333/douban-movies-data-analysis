@@ -81,6 +81,46 @@
 
       <!-- ==================== 首页 ==================== -->
       <section class="page active" id="page-home">
+        <div class="home-layout">
+          <!-- F1 左侧筛选区：驱动首页图表（与影片库共用同一套全局筛选） -->
+          <aside class="filter-panel">
+            <div class="filter-panel-title">筛选条件</div>
+
+            <!-- F2 类型筛选：下拉框 -->
+            <div class="filter-block">
+              <label for="homeTypeSelect">类型</label>
+              <select id="homeTypeSelect"><option value="">全部类型</option></select>
+            </div>
+
+            <!-- F3 年份区间筛选 -->
+            <div class="filter-block">
+              <label>年份区间</label>
+              <input type="number" id="homeYearStart" placeholder="起始年" />
+              <input type="number" id="homeYearEnd" placeholder="结束年" />
+            </div>
+
+            <!-- F4 评分筛选：下拉快捷区间 + 自定义 -->
+            <div class="filter-block">
+              <label for="ratingPreset">评分区间</label>
+              <select id="ratingPreset">
+                <option value="">全部评分</option>
+                <option value="8-10">8 分以上</option>
+                <option value="7-8">7 – 8 分</option>
+                <option value="6-7">6 – 7 分</option>
+                <option value="0-6">6 分以下</option>
+              </select>
+              <div class="range-inputs">
+                <input type="number" id="ratingMin" min="0" max="10" step="0.1" placeholder="最低" />
+                <span>—</span>
+                <input type="number" id="ratingMax" min="0" max="10" step="0.1" placeholder="最高" />
+              </div>
+            </div>
+
+            <button id="homeResetBtn" class="btn-reset">重置筛选</button>
+            <p class="filter-note">筛选条件全局生效：首页图表、影片库表格同步刷新</p>
+          </aside>
+
+          <div class="home-main">
         <div class="kpi-grid">
           <div class="kpi-card">
             <div class="kpi-label">电影总数</div>
@@ -129,6 +169,8 @@
           </div>
           <div class="rank-list rank-list-compact" id="homeRanking"></div>
         </div>
+          </div><!-- /home-main -->
+        </div><!-- /home-layout -->
       </section>
 
       <!-- ==================== 综合热榜 ==================== -->
@@ -136,14 +178,22 @@
         <div class="page-head">
           <div>
             <h2>综合热榜</h2>
-            <p class="page-desc">全部 850 部影片中口碑与热度最高的作品，点击卡片查看详情</p>
+            <p class="page-desc">全部影片中口碑与热度最高的作品，点击卡片查看详情</p>
           </div>
           <div class="chart-toggle" id="rankOverallToggle">
             <button class="toggle-btn active" data-by="rating">按评分</button>
             <button class="toggle-btn" data-by="votes">按评价人数</button>
           </div>
         </div>
-        <div class="rank-list" id="rankList-overall"></div>
+        <!-- F7 ECharts 横向柱状图（课程要求） -->
+        <div class="panel">
+          <div class="panel-head"><h3>F7 热门 TOP10</h3><span class="panel-sub">横向柱状图 · 与下方榜单同数据源</span></div>
+          <div class="chart-body" id="chartTopWorksBar"></div>
+        </div>
+        <!-- 豆瓣式海报榜单（更易读的补充呈现） -->
+        <div class="panel" style="margin-top:16px; padding:16px; background:transparent; border:none; box-shadow:none;">
+          <div class="rank-list" id="rankList-overall"></div>
+        </div>
       </section>
 
       <!-- ==================== 分地区 ==================== -->
@@ -209,7 +259,7 @@
         </div>
         <div class="panel-row panel-row-2">
           <div class="panel">
-            <div class="panel-head"><h3>成本-票房散点</h3><span class="panel-sub">气泡大小 = 评分</span></div>
+            <div class="panel-head"><h3>评分 × 热度散点</h3><span class="panel-sub">横轴=豆瓣评分 · 纵轴=评价人数（对数）· 气泡=热度</span></div>
             <div class="chart-body chart-body-lg" id="chartScatterCostBox"></div>
           </div>
           <div class="panel">
@@ -328,9 +378,10 @@
 <!-- 图表注册中心：统一 init/render/resize/dispose/懒渲染/错误态 -->
 <script src="js/charts/registry.js"></script>
 
-<script src="js/charts/ratingDistribution.js"></script>
-<script src="js/charts/yearTrend.js"></script>
-<script src="js/charts/genreCompare.js"></script>
+  <script src="js/charts/ratingDistribution.js"></script>
+  <script src="js/charts/yearTrend.js"></script>
+  <script src="js/charts/topWorksBar.js"></script>
+  <script src="js/charts/genreCompare.js"></script>
 <script src="js/charts/scatterCostBox.js"></script>
 <script src="js/charts/heatmap.js"></script>
 <script src="js/charts/seasonAnalysis.js"></script>
