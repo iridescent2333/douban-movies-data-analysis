@@ -3,7 +3,6 @@ package com.movie.dashboard.service;
 import com.movie.dashboard.dto.*;
 import com.movie.dashboard.entity.Genre;
 import com.movie.dashboard.entity.Movie;
-import com.movie.dashboard.exception.GlobalExceptionHandler;
 import com.movie.dashboard.repository.GenreRepository;
 import com.movie.dashboard.repository.MovieRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -41,16 +40,16 @@ public class MovieService {
     private GenreRepository genreRepository;
 
     /**
-     * 多条件筛选 + 分页。
+     * 多条件筛选 + 分页（返回课程要求的 {page, size, total, records} 结构）。
      * <p>
      * 当 genres 传了多个时，语义为"同时包含所有选中类型"（AND）。
      * 注意：多类型必须在分页之前完成过滤——
-     * 若先分页再在内存里做 AND 补齐，命中数量少的组合（如"科幻+动作"仅 9 部）
+     * 若先分页再在内存里做 AND 补齐，命中数量少的组合
      * 会因为第一页恰好都不满足而被过滤成空列表。
      * </p>
      */
     @Transactional(readOnly = true)
-    public Page<MovieDTO> getMovies(MovieQueryDTO q) {
+    public PageResult<MovieDTO> getMovies(MovieQueryDTO q) {
         List<String> requiredGenres = q.getGenres();
         boolean multiGenre = requiredGenres != null && requiredGenres.size() > 1;
 
@@ -62,7 +61,7 @@ public class MovieService {
         int size = q.getSize() == null ? 20 : Math.max(1, q.getSize());
         Pageable pageable = PageRequest.of(pageNo, size);
 
-        // 多类型：先取全量（数据量仅数百条，开销可忽略），过滤后再手动分页
+        // 多类型：先取全量（数据量仅数千条，开销可忽略），过滤后再手动分页
         Page<Movie> page = movieRepository.findByMultiCriteria(
                 q.getYearStart(), q.getYearEnd(), q.getCountry(),
                 q.getRatingMin(), q.getRatingMax(), q.getTitle(),
@@ -78,9 +77,9 @@ public class MovieService {
             int total = content.size();
             int from = Math.min(pageNo * size, total);
             int to = Math.min(from + size, total);
-            return new PageImpl<>(content.subList(from, to), pageable, total);
+            return PageResult.of(content.subList(from, to), pageNo, size, total);
         }
-        return new PageImpl<>(content, pageable, page.getTotalElements());
+        return PageResult.of(content, pageNo, size, page.getTotalElements());
     }
 
     /**
@@ -105,7 +104,7 @@ public class MovieService {
         return new FilterOptionsDTO(years, countries, genres);
     }
 
-    // ---------- 私有转换 ----------
+    // ---------- 转换 ----------
 
     private boolean containsAllGenres(Movie m, List<String> required) {
         if (m.getGenres() == null) return false;
@@ -127,6 +126,9 @@ public class MovieService {
         d.setVoteCount(m.getVoteCount());
         d.setPosterUrl(m.getPosterUrl());
         d.setIntro(m.getIntro());
+        d.setLink(m.getLink());
+        d.setReleaseDate(m.getReleaseDate() == null ? null : m.getReleaseDate().toString());
+        d.setSeasonTag(m.getSeasonTag());
         d.setGenres(m.getGenres() == null ? Collections.emptyList()
                 : m.getGenres().stream().map(Genre::getName).collect(Collectors.toList()));
         return d;
@@ -145,17 +147,11 @@ public class MovieService {
         d.setVoteCount(m.getVoteCount());
         d.setIntro(m.getIntro());
         d.setPosterUrl(m.getPosterUrl());
-        d.setIntro(m.getIntro());
+        d.setLink(m.getLink());
+        d.setReleaseDate(m.getReleaseDate() == null ? null : m.getReleaseDate().toString());
+        d.setSeasonTag(m.getSeasonTag());
         d.setGenres(m.getGenres() == null ? Collections.emptyList()
                 : m.getGenres().stream().map(Genre::getName).collect(Collectors.toList()));
-        if (m.getFinancial() != null) {
-            MovieDetailDTO.FinancialInfo fi = new MovieDetailDTO.FinancialInfo();
-            fi.setBudgetWan(m.getFinancial().getBudgetWan());
-            fi.setBoxOfficeWan(m.getFinancial().getBoxOfficeWan());
-            fi.setReleaseDate(m.getFinancial().getReleaseDate());
-            fi.setSeasonTag(m.getFinancial().getSeasonTag());
-            d.setFinancial(fi);
-        }
         return d;
     }
 }

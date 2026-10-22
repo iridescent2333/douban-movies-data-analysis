@@ -11,17 +11,17 @@ public class GenreCompareDTO {
 
     private BigDecimal avgRating;
 
-    private BigDecimal avgBoxOffice;
+    private BigDecimal avgVotes;
 
     private Long count;
 
     public GenreCompareDTO() {
     }
 
-    public GenreCompareDTO(String genre, BigDecimal avgRating, BigDecimal avgBoxOffice, Long count) {
+    public GenreCompareDTO(String genre, BigDecimal avgRating, BigDecimal avgVotes, Long count) {
         this.genre = genre;
         this.avgRating = avgRating;
-        this.avgBoxOffice = avgBoxOffice;
+        this.avgVotes = avgVotes;
         this.count = count;
     }
 
@@ -41,12 +41,12 @@ public class GenreCompareDTO {
         this.avgRating = avgRating;
     }
 
-    public BigDecimal getAvgBoxOffice() {
-        return avgBoxOffice;
+    public BigDecimal getAvgVotes() {
+        return avgVotes;
     }
 
-    public void setAvgBoxOffice(BigDecimal avgBoxOffice) {
-        this.avgBoxOffice = avgBoxOffice;
+    public void setAvgVotes(BigDecimal avgVotes) {
+        this.avgVotes = avgVotes;
     }
 
     public Long getCount() {

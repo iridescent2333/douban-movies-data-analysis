@@ -1,13 +1,11 @@
 package com.movie.dashboard.dto;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 电影详情 DTO。
+ * 电影详情 DTO（A3 接口响应）。
  * <p>
- * 包含基础信息 + 类型列表 + 可选的财务数据。
+ * 包含基础信息 + 类型列表 + 豆瓣链接；全部字段来自真实豆瓣数据。
  * </p>
  */
 public class MovieDetailDTO {
@@ -19,14 +17,19 @@ public class MovieDetailDTO {
     private String country;
     private Integer year;
     private Integer duration;
-    private BigDecimal rating;
+    private java.math.BigDecimal rating;
     private Integer voteCount;
     private String intro;
     private String posterUrl;
+    private String link;
+
+    /** 上映日期（yyyy-MM-dd） */
+    private String releaseDate;
+
+    /** 档期标签 */
+    private String seasonTag;
 
     private List<String> genres;
-
-    private FinancialInfo financial;
 
     public MovieDetailDTO() {
     }
@@ -87,11 +90,11 @@ public class MovieDetailDTO {
         this.duration = duration;
     }
 
-    public BigDecimal getRating() {
+    public java.math.BigDecimal getRating() {
         return rating;
     }
 
-    public void setRating(BigDecimal rating) {
+    public void setRating(java.math.BigDecimal rating) {
         this.rating = rating;
     }
 
@@ -119,66 +122,35 @@ public class MovieDetailDTO {
         this.posterUrl = posterUrl;
     }
 
+    public String getLink() {
+        return link;
+    }
+
+    public void setLink(String link) {
+        this.link = link;
+    }
+
+    public String getReleaseDate() {
+        return releaseDate;
+    }
+
+    public void setReleaseDate(String releaseDate) {
+        this.releaseDate = releaseDate;
+    }
+
+    public String getSeasonTag() {
+        return seasonTag;
+    }
+
+    public void setSeasonTag(String seasonTag) {
+        this.seasonTag = seasonTag;
+    }
+
     public List<String> getGenres() {
         return genres;
     }
 
     public void setGenres(List<String> genres) {
         this.genres = genres;
-    }
-
-    public FinancialInfo getFinancial() {
-        return financial;
-    }
-
-    public void setFinancial(FinancialInfo financial) {
-        this.financial = financial;
-    }
-
-    /** 内嵌财务信息：避免再写一个类 */
-    public static class FinancialInfo {
-
-        private BigDecimal budgetWan;
-
-        private BigDecimal boxOfficeWan;
-
-        private LocalDate releaseDate;
-
-        private String seasonTag;
-
-        public FinancialInfo() {
-        }
-
-        public BigDecimal getBudgetWan() {
-            return budgetWan;
-        }
-
-        public void setBudgetWan(BigDecimal budgetWan) {
-            this.budgetWan = budgetWan;
-        }
-
-        public BigDecimal getBoxOfficeWan() {
-            return boxOfficeWan;
-        }
-
-        public void setBoxOfficeWan(BigDecimal boxOfficeWan) {
-            this.boxOfficeWan = boxOfficeWan;
-        }
-
-        public LocalDate getReleaseDate() {
-            return releaseDate;
-        }
-
-        public void setReleaseDate(LocalDate releaseDate) {
-            this.releaseDate = releaseDate;
-        }
-
-        public String getSeasonTag() {
-            return seasonTag;
-        }
-
-        public void setSeasonTag(String seasonTag) {
-            this.seasonTag = seasonTag;
-        }
     }
 }

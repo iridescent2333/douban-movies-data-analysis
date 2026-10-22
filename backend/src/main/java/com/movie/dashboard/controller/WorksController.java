@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -41,7 +40,7 @@ public class WorksController {
     /** A2：按类型、年份区间、评分区间查询作品，分页返回 */
     @Operation(summary = "A2 作品分页列表", description = "支持类型、年份区间、评分区间、标题关键字组合筛选；page 从 0 开始")
     @GetMapping("")
-    public Result<Page<MovieDTO>> list(
+    public Result<PageResult<MovieDTO>> list(
             @Parameter(description = "页码，从 0 开始") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "每页条数，默认 20") @RequestParam(defaultValue = "20") int size,
             @Parameter(description = "类型（精确匹配）") @RequestParam(required = false) String type,

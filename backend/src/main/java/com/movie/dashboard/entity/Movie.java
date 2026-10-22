@@ -3,24 +3,23 @@ package com.movie.dashboard.entity;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * 电影主实体。
+ * 电影主实体（数据来源：Kaggle 公开豆瓣电影数据集）。
  * <p>
- * 与 Genre 为多对多，由中间表 movie_genres 维护；
- * 与 MovieFinancial 为一对一，以 movie_id 作为外键。
+ * 与 Genre 为多对多，由中间表 movie_genres 维护。
  * </p>
  */
 @Entity
 @Table(name = "movies")
 public class Movie {
 
-    /** 主键，自增 */
+    /** 主键，直接使用豆瓣电影 ID（CSV 导入时指定） */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     /** 电影标题 */
@@ -42,6 +41,18 @@ public class Movie {
     /** 上映年份 —— 列名不用 year（H2/SQL 保留字），改用 release_year */
     @Column(name = "release_year")
     private Integer year;
+
+    /** 上映日期（yyyy-MM-dd），可用于按月份统计档期 */
+    @Column(name = "release_date")
+    private LocalDate releaseDate;
+
+    /** 档期标签（按上映月份映射：春季档/暑期档/秋季档/贺岁档） */
+    @Column(name = "season_tag", length = 20)
+    private String seasonTag;
+
+    /** 豆瓣条目页链接（详情页"去豆瓣看"入口） */
+    @Column(name = "link", length = 200)
+    private String link;
 
     /** 片长（分钟） */
     @Column(name = "duration")
@@ -75,32 +86,28 @@ public class Movie {
     )
     private Set<Genre> genres = new HashSet<>();
 
-    /**
-     * 一对一的财务数据（可选）。
-     * 不做级联，财务数据由独立流程维护。
-     */
-    @OneToOne(mappedBy = "movie", cascade = CascadeType.REFRESH, fetch = FetchType.LAZY)
-    private MovieFinancial financial;
-
     public Movie() {
     }
 
     public Movie(Long id, String title, String director, String leadActor, String country,
-                 Integer year, Integer duration, BigDecimal rating, Integer voteCount,
-                 String intro, String posterUrl, Set<Genre> genres, MovieFinancial financial) {
+                 Integer year, LocalDate releaseDate, String seasonTag, Integer duration,
+                 BigDecimal rating, Integer voteCount, String intro, String posterUrl,
+                 String link, Set<Genre> genres) {
         this.id = id;
         this.title = title;
         this.director = director;
         this.leadActor = leadActor;
         this.country = country;
         this.year = year;
+        this.releaseDate = releaseDate;
+        this.seasonTag = seasonTag;
         this.duration = duration;
         this.rating = rating;
         this.voteCount = voteCount;
         this.intro = intro;
         this.posterUrl = posterUrl;
+        this.link = link;
         this.genres = genres;
-        this.financial = financial;
     }
 
     public Long getId() {
@@ -191,20 +198,36 @@ public class Movie {
         this.posterUrl = posterUrl;
     }
 
+    public LocalDate getReleaseDate() {
+        return releaseDate;
+    }
+
+    public void setReleaseDate(LocalDate releaseDate) {
+        this.releaseDate = releaseDate;
+    }
+
+    public String getSeasonTag() {
+        return seasonTag;
+    }
+
+    public void setSeasonTag(String seasonTag) {
+        this.seasonTag = seasonTag;
+    }
+
+    public String getLink() {
+        return link;
+    }
+
+    public void setLink(String link) {
+        this.link = link;
+    }
+
     public Set<Genre> getGenres() {
         return genres;
     }
 
     public void setGenres(Set<Genre> genres) {
         this.genres = genres;
-    }
-
-    public MovieFinancial getFinancial() {
-        return financial;
-    }
-
-    public void setFinancial(MovieFinancial financial) {
-        this.financial = financial;
     }
 
     @Override
