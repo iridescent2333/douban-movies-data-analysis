@@ -31,6 +31,18 @@ public class MovieDTO {
 
     private String posterUrl;
 
+    /** 故事梗概（排行榜卡片展示用） */
+    private String intro;
+
+    /** 豆瓣条目页链接 */
+    private String link;
+
+    /** 上映日期（yyyy-MM-dd） */
+    private String releaseDate;
+
+    /** 档期标签 */
+    private String seasonTag;
+
     private List<String> genres;
 
     public MovieDTO() {
@@ -116,10 +128,41 @@ public class MovieDTO {
         this.posterUrl = posterUrl;
     }
 
+    public String getIntro() {
+        return intro;
+    }
+
+    public void setIntro(String intro) {
+        this.intro = intro;
+    }
+
+    public String getLink() {
+        return link;
+    }
+
+    public void setLink(String link) {
+        this.link = link;
+    }
+
+    public String getReleaseDate() {
+        return releaseDate;
+    }
+
+    public void setReleaseDate(String releaseDate) {
+        this.releaseDate = releaseDate;
+    }
+
+    public String getSeasonTag() {
+        return seasonTag;
+    }
+
+    public void setSeasonTag(String seasonTag) {
+        this.seasonTag = seasonTag;
+    }
+
     public List<String> getGenres() {
         return genres;
     }
-
     public void setGenres(List<String> genres) {
         this.genres = genres;
     }

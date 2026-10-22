@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -41,7 +40,7 @@ public class WorksController {
     /** A2：按类型、年份区间、评分区间查询作品，分页返回 */
     @Operation(summary = "A2 作品分页列表", description = "支持类型、年份区间、评分区间、标题关键字组合筛选；page 从 0 开始")
     @GetMapping("")
-    public Result<Page<MovieDTO>> list(
+    public Result<PageResult<MovieDTO>> list(
             @Parameter(description = "页码，从 0 开始") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "每页条数，默认 20") @RequestParam(defaultValue = "20") int size,
             @Parameter(description = "类型（精确匹配）") @RequestParam(required = false) String type,
@@ -96,12 +95,13 @@ public class WorksController {
     }
 
     /** A5：TOP10（按评分或评价人数） */
-    @Operation(summary = "A5 热门作品 TOP N", description = "by=rating 按评分降序（默认），by=votes 按评价人数降序")
+    @Operation(summary = "A5 热门作品 TOP N", description = "by=rating 按评分降序（默认），by=votes 按评价人数降序；支持按类型/地区/年份区间筛选，用于「综合/分地区/分年代/分类型」排行榜")
     @GetMapping("/top")
     public Result<List<MovieDTO>> top(
             @Parameter(description = "返回条数，默认 10") @RequestParam(defaultValue = "10") int n,
             @Parameter(description = "排序依据：rating / votes") @RequestParam(defaultValue = "rating") String by,
             @Parameter(description = "类型（精确匹配）") @RequestParam(required = false) String type,
+            @Parameter(description = "国家/地区（分地区排行榜用）") @RequestParam(required = false) String country,
             @Parameter(description = "起始年份（含）") @RequestParam(required = false) Integer yearStart,
             @Parameter(description = "结束年份（含）") @RequestParam(required = false) Integer yearEnd,
             @Parameter(description = "最低评分（含）") @RequestParam(required = false) BigDecimal ratingMin,
@@ -110,6 +110,7 @@ public class WorksController {
 
         MovieQueryDTO q = new MovieQueryDTO();
         q.setGenres(type == null || type.isBlank() ? null : List.of(type));
+        q.setCountry(country);
         q.setYearStart(yearStart);
         q.setYearEnd(yearEnd);
         q.setRatingMin(ratingMin);

@@ -1,12 +1,13 @@
 /**
  * genreCompare.js —— F8 类型对比（柱状图 / 雷达图切换）
  * 数据格式期望：
- *   [ { genre: '动作', avgRating: 7.2, avgBoxOffice: 5200, count: 120 }, ... ]
+ *   [ { genre: '动作', avgRating: 7.2, avgVotes: 5200, count: 120 }, ... ]
  *
  * 课程要求 F8：「类型对比雷达图/柱状图，对比不同类型在评分、数量上的差异」，
  * 因此提供两种视图，由页面切换按钮驱动：
- *   bar   —— 横向双柱：平均评分（×1000 便于同轴对比）与平均票房
- *   radar —— 雷达图：平均评分 / 电影数量 / 平均票房 三个维度，一眼看出类型"偏科"
+ *   bar   —— 横向双柱：平均评分（×1000 便于同轴对比）与平均热度
+ *   radar —— 雷达图：平均评分 / 电影数量 / 平均热度 三个维度，一眼看出类型"偏科"
+ *   （热度 = 平均评价人数；公开数据集无真实票房，禁止编造）
  */
 (function (global) {
   'use strict';
@@ -49,7 +50,7 @@
       return '<b>' + raw.genre + '</b><br/>'
         + '电影数量：' + raw.count + '<br/>'
         + '平均评分：' + (raw.avgRating || '-') + '<br/>'
-        + '平均票房：' + (raw.avgBoxOffice != null ? raw.avgBoxOffice + ' 万' : '-');
+        + '平均热度：' + (raw.avgVotes != null ? (raw.avgVotes/10000).toFixed(1) + ' 万人评价' : '-');
     };
 
     var option;
@@ -57,7 +58,7 @@
       // ---- 雷达图：取数量 TOP 8 的类型，避免雷达图过密 ----
       var top = sorted.slice(0, 8);
       var maxCount = Math.max.apply(null, top.map(function (d) { return d.count || 0; }).concat([1]));
-      var maxBox = Math.max.apply(null, top.map(function (d) { return d.avgBoxOffice || 0; }).concat([1]));
+      var maxBox = Math.max.apply(null, top.map(function (d) { return d.avgVotes || 0; }).concat([1])) / 10000;
 
       option = {
         tooltip: { trigger: 'item' },
@@ -66,7 +67,7 @@
           indicator: [
             { name: '平均评分', max: 10 },
             { name: '电影数量', max: maxCount },
-            { name: '平均票房(万)', max: maxBox },
+            { name: '平均热度(万人)', max: maxBox },
           ],
           radius: '62%',
           splitArea: { areaStyle: { opacity: 0.06 } },
@@ -76,7 +77,7 @@
           data: top.map(function (d) {
             return {
               name: d.genre,
-              value: [d.avgRating || 0, d.count || 0, d.avgBoxOffice != null ? +d.avgBoxOffice : 0],
+              value: [d.avgRating || 0, d.count || 0, d.avgVotes != null ? +(d.avgVotes/10000).toFixed(1) : 0],
             };
           }),
           symbolSize: 3,
@@ -90,7 +91,7 @@
         return d.avgRating != null ? +(d.avgRating * ratingScale).toFixed(1) : 0;
       });
       var boxOffices = sorted.map(function (d) {
-        return d.avgBoxOffice != null ? +d.avgBoxOffice.toFixed(1) : 0;
+        return d.avgVotes != null ? +(d.avgVotes/1000).toFixed(1) : 0;   // 万人
       });
 
       option = {
@@ -100,7 +101,7 @@
           formatter: tooltipFormatter,
         },
         legend: {
-          data: ['平均评分(×1000)', '平均票房(万)'],
+          data: ['平均评分(×1000)', '平均热度(千人)'],
           top: 4,
         },
         grid: { left: 70, right: 30, top: 40, bottom: 20 },
@@ -118,10 +119,10 @@
             itemStyle: { color: '#f0a020', borderRadius: [0, 4, 4, 0] },
           },
           {
-            name: '平均票房(万)',
+            name: '平均热度(千人)',
             type: 'bar',
             data: boxOffices,
-            itemStyle: { color: '#42AC4E', borderRadius: [0, 4, 4, 0] },
+            itemStyle: { color: '#fb7299', borderRadius: [0, 4, 4, 0] },
           },
         ],
       };

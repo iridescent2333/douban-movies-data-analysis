@@ -70,7 +70,7 @@
         right: 10,
         top: 'center',
         inRange: {
-          color: ['#2d6e35', '#42AC4E', '#7dd888', '#c8e6a0', '#f0e890', '#f0a020', '#e04040'],
+          color: ['#2d6e35', '#fb7299', '#ffb3cd', '#c8e6a0', '#f0e890', '#f0a020', '#e04040'],
         },
         textStyle: { fontSize: 11 },
       },

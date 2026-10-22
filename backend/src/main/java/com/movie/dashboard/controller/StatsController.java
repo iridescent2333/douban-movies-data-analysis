@@ -49,9 +49,9 @@ public class StatsController {
         return Result.ok(statsService.genreCompare(q));
     }
 
-    /** 成本-票房散点 */
-    @GetMapping("/scatter-cost-box")
-    public Result<List<ScatterPointDTO>> scatterCostBox(
+    /** 评分 × 热度散点（公开数据集无真实票房，改为两个真实维度） */
+    @GetMapping("/rating-votes-scatter")
+    public Result<List<ScatterPointDTO>> ratingVotesScatter(
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,
@@ -59,7 +59,7 @@ public class StatsController {
             @RequestParam(required = false) BigDecimal ratingMin,
             @RequestParam(required = false) BigDecimal ratingMax) {
         MovieQueryDTO q = buildQuery(yearStart, yearEnd, genres, country, ratingMin, ratingMax);
-        return Result.ok(statsService.scatterCostBox(q));
+        return Result.ok(statsService.ratingVotesScatter(q));
     }
 
     /** 国家 × 类型 热力图 */

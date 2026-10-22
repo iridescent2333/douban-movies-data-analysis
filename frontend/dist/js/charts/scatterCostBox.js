@@ -1,7 +1,10 @@
 /**
- * scatterCostBox.js —— 图-3 成本-票房散点图（气泡大小=评分 + 线性拟合线）
- * 数据格式期望：
- *   [ { movie: 'xxx', cost: 1200, boxOffice: 5600, rating: 7.8, genre: '动作' }, ... ]
+ * scatterCostBox.js —— 评分 × 热度散点图
+ * 数据格式期望：[{ movie, title, id, rating, votes, genre(国家/地区) }, ...]
+ *
+ * 说明：公开豆瓣数据集没有真实的制作预算/票房，为遵守"禁止编造数据"的要求，
+ *       本散点图从"成本-票房"改为"评分 × 评价人数"——两个维度均为豆瓣真实数据。
+ *       Y 轴（评价人数）跨度大（几千到三百多万），使用对数刻度。
  */
 (function (global) {
   'use strict';
@@ -13,29 +16,6 @@
     // 统一走设计令牌：主题名与配色集中由 js/theme.js 管理（app-light / app-dark）
     return global.UI_THEME ? global.UI_THEME.current()
       : (document.body.classList.contains('dark') ? 'dark' : null);
-  }
-
-  /**
-   * 最小二乘法线性回归 y = a*x + b
-   * @param {number[]} xs
-   * @param {number[]} ys
-   * @returns {{a:number, b:number}}
-   */
-  function linearRegression(xs, ys) {
-    var n = xs.length;
-    if (n < 2) return { a: 0, b: 0 };
-    var sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-    for (var i = 0; i < n; i++) {
-      sumX += xs[i];
-      sumY += ys[i];
-      sumXY += xs[i] * ys[i];
-      sumX2 += xs[i] * xs[i];
-    }
-    var den = n * sumX2 - sumX * sumX;
-    if (den === 0) return { a: 0, b: sumY / n };
-    var a = (n * sumXY - sumX * sumY) / den;
-    var b = (sumY - a * sumX) / n;
-    return { a: a, b: b };
   }
 
   function render(data) {
@@ -52,96 +32,61 @@
     if (chart) chart.dispose();
     chart = echarts.init(dom, getTheme());
 
-    // 过滤有 cost 与 boxOffice 的数据
-    var valid = data.filter(function (d) {
-      return d.cost != null && d.boxOffice != null;
+    // 按国家/地区分组，一组一个系列（图例可勾选）
+    var groups = {};
+    data.forEach(function (d) {
+      var key = d.genre || '其他';
+      (groups[key] = groups[key] || []).push(d);
     });
 
-    // 气泡大小映射
-    var minRating = 6, maxRating = 10;
-    var minSize = 6, maxSize = 30;
-    function ratingToSize(r) {
-      if (r == null) return 10;
-      var ratio = Math.max(0, Math.min(1, (r - minRating) / (maxRating - minRating)));
-      return minSize + ratio * (maxSize - minSize);
-    }
-
-    var scatterData = valid.map(function (d) {
+    var palette = global.UI_THEME ? global.UI_THEME.palette() : [];
+    var series = Object.keys(groups).slice(0, 10).map(function (key, i) {
       return {
-        name: d.movie || d.title || '未知',
-        value: [d.cost, d.boxOffice, d.rating != null ? ratingToSize(d.rating) : 10],
-        rating: d.rating,
-        genre: d.genre,
+        name: key,
+        type: 'scatter',
+        data: groups[key].map(function (d) {
+          return {
+            value: [d.rating, d.votes],
+            name: d.title,
+            id: d.id,
+            // 气泡大小随评价人数增长（开方压缩，避免大热门把其它点压扁）
+            symbolSize: Math.max(6, Math.min(26, Math.sqrt(d.votes) / 14)),
+            itemStyle: { color: palette[i % palette.length], opacity: 0.65 },
+          };
+        }),
       };
     });
 
-    // 拟合线
-    var xs = valid.map(function (d) { return d.cost; });
-    var ys = valid.map(function (d) { return d.boxOffice; });
-    var reg = linearRegression(xs, ys);
-    var minX = Math.min.apply(null, xs);
-    var maxX = Math.max.apply(null, xs);
-    var linePoints = [
-      [minX, reg.a * minX + reg.b],
-      [maxX, reg.a * maxX + reg.b],
-    ];
-
-    var option = {
+    var base = global.UI_THEME ? global.UI_THEME.baseOption() : {};
+    chart.setOption(Object.assign({}, base, {
       tooltip: {
         trigger: 'item',
         formatter: function (p) {
-          var d = p.data;
-          return '<b>' + d.name + '</b><br/>'
-            + '成本：' + p.value[0] + ' 万<br/>'
-            + '票房：' + p.value[1] + ' 万<br/>'
-            + '评分：' + (d.rating != null ? d.rating : '-') + '<br/>'
-            + (d.genre ? '类型：' + d.genre : '');
+          return '<b>' + p.data.name + '</b><br/>'
+            + '豆瓣评分：' + p.value[0] + '<br/>'
+            + '评价人数：' + p.value[1].toLocaleString() + '<br/>'
+            + '地区：' + p.seriesName;
         },
       },
-      grid: { left: 60, right: 30, top: 30, bottom: 50 },
+      legend: { top: 2, type: 'scroll', textStyle: { fontSize: 11 } },
+      grid: { left: 56, right: 24, top: 34, bottom: 34 },
       xAxis: {
         type: 'value',
-        name: '成本（万）',
-        nameLocation: 'middle',
-        nameGap: 30,
+        name: '豆瓣评分',
+        nameLocation: 'middle', nameGap: 24,
+        min: 2, max: 10,
       },
       yAxis: {
-        type: 'value',
-        name: '票房（万）',
-        nameLocation: 'middle',
-        nameGap: 40,
-      },
-      series: [
-        {
-          name: '电影',
-          type: 'scatter',
-          data: scatterData,
-          symbolSize: function (val) { return val[2] || 10; },
-          itemStyle: {
-            color: function (p) {
-              // 评分越高颜色越接近豆瓣绿
-              var r = p.data.rating || 7;
-              if (r >= 8.5) return '#42AC4E';
-              if (r >= 7.5) return '#7dd888';
-              if (r >= 6.5) return '#f0a020';
-              return '#e04040';
-            },
-            opacity: 0.75,
+        type: 'log',                       // 评价人数跨度大，对数轴才能铺开
+        name: '评价人数',
+        axisLabel: {
+          formatter: function (v) {
+            return v >= 10000 ? (v / 10000) + '万' : v;
           },
         },
-        {
-          name: '拟合线',
-          type: 'line',
-          data: linePoints,
-          smooth: false,
-          showSymbol: false,
-          lineStyle: { color: '#888', width: 1.5, type: 'dashed' },
-          tooltip: { show: false },
-        },
-      ],
-    };
-
-    chart.setOption(option, true);
+      },
+      series: series,
+    }));
   }
 
   function resize() { if (chart) chart.resize(); }

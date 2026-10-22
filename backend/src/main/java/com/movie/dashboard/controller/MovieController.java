@@ -4,7 +4,6 @@ import com.movie.dashboard.dto.*;
 import com.movie.dashboard.exception.Result;
 import com.movie.dashboard.service.MovieService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -31,7 +30,7 @@ public class MovieController {
      * 给图表用：列表页 / 筛选后展示区
      */
     @GetMapping
-    public Result<Page<MovieDTO>> list(
+    public Result<PageResult<MovieDTO>> list(
             @RequestParam(required = false) Integer yearStart,
             @RequestParam(required = false) Integer yearEnd,
             @RequestParam(required = false) List<String> genres,

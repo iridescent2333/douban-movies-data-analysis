@@ -87,7 +87,13 @@
         var tr = document.createElement('tr');
         tr.dataset.id = m.id;
         tr.className = 'works-row';
+        // 缩略海报：走后端代理；加载失败隐藏 img，保留文字
+        var thumb = m.posterUrl
+          ? '<img class="row-poster" src="' + (global.APP_CONFIG.API_BASE + '/api/works/' + m.id + '/poster') +
+            '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">'
+          : '';
         tr.innerHTML =
+          '<td class="col-poster">' + thumb + '</td>' +
           '<td class="col-id">' + m.id + '</td>' +
           '<td class="col-title" title="' + escapeHtml(m.title) + '">' + escapeHtml(m.title || '未命名') + '</td>' +
           '<td class="col-director">' + escapeHtml(m.director || '-') + '</td>' +

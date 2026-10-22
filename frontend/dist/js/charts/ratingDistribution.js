@@ -64,14 +64,14 @@
             value: v,
             itemStyle: {
               // 峰值评分段用主色高亮，其余用浅色，一眼看出"评分集中区"
-              color: v === maxCount && v > 0 ? '#42AC4E' : undefined,
+              color: v === maxCount && v > 0 ? '#fb7299' : undefined,
               borderRadius: [3, 3, 0, 0],
             },
           };
         }),
         barMaxWidth: 28,
         // 点击评分段 → 通知 main.js 写入评分筛选
-        emphasis: { itemStyle: { color: '#37963f' } },
+        emphasis: { itemStyle: { color: '#fc8bab' } },
       }],
     }));
 

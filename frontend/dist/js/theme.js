@@ -16,10 +16,10 @@
 (function (global) {
   'use strict';
 
-  /** 分类色板：主色为豆瓣绿，相邻色相拉开，保证多系列图表可区分 */
+  /** 分类色板：主色为 B 站粉，与页面主色一致；相邻色相拉开，保证多系列图表可区分 */
   var PALETTE = [
-    '#42AC4E', '#3C7FF0', '#F2994A', '#9B51E0', '#EB5757',
-    '#2D9CDB', '#BB6BD9', '#6FCF97', '#F2C94C', '#56CCF2',
+    '#FB7299', '#00AEEC', '#FFB027', '#7B61FF', '#FF6B6B',
+    '#3BC8A5', '#B96BD9', '#8CD44A', '#F2C94C', '#56CCF2',
   ];
 
   var FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, Arial, sans-serif';
