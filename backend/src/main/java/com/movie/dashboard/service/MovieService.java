@@ -43,37 +43,44 @@ public class MovieService {
     /**
      * 多条件筛选 + 分页。
      * <p>
-     * 当 genres 传了多个时，Service 层对 Repository 的结果再做一次内存过滤，
-     * 保证返回的电影"同时包含所有指定类型"（AND 语义）。
+     * 当 genres 传了多个时，语义为"同时包含所有选中类型"（AND）。
+     * 注意：多类型必须在分页之前完成过滤——
+     * 若先分页再在内存里做 AND 补齐，命中数量少的组合（如"科幻+动作"仅 9 部）
+     * 会因为第一页恰好都不满足而被过滤成空列表。
      * </p>
      */
     @Transactional(readOnly = true)
     public Page<MovieDTO> getMovies(MovieQueryDTO q) {
+        List<String> requiredGenres = q.getGenres();
+        boolean multiGenre = requiredGenres != null && requiredGenres.size() > 1;
+
         // 把多个 genres 拍扁为一个 primaryGenre 先过 SQL，避免 INNER JOIN 笛卡儿积
-        String primaryGenre = (q.getGenres() != null && !q.getGenres().isEmpty())
-                ? q.getGenres().get(0) : null;
+        String primaryGenre = (requiredGenres != null && !requiredGenres.isEmpty())
+                ? requiredGenres.get(0) : null;
 
-        Pageable pageable = PageRequest.of(
-                q.getPage() == null ? 0 : q.getPage(),
-                q.getSize() == null ? 20 : q.getSize());
+        int pageNo = q.getPage() == null ? 0 : Math.max(0, q.getPage());
+        int size = q.getSize() == null ? 20 : Math.max(1, q.getSize());
+        Pageable pageable = PageRequest.of(pageNo, size);
 
+        // 多类型：先取全量（数据量仅数百条，开销可忽略），过滤后再手动分页
         Page<Movie> page = movieRepository.findByMultiCriteria(
                 q.getYearStart(), q.getYearEnd(), q.getCountry(),
                 q.getRatingMin(), q.getRatingMax(), q.getTitle(),
-                primaryGenre, pageable);
+                primaryGenre, multiGenre ? Pageable.unpaged() : pageable);
 
-        List<String> requiredGenres = q.getGenres();
         List<MovieDTO> content = page.getContent().stream()
                 .filter(m -> requiredGenres == null || requiredGenres.isEmpty()
                         || containsAllGenres(m, requiredGenres))
                 .map(this::toDTO)
                 .collect(Collectors.toList());
 
-        // 如果做了二次内存过滤，count 也要重新算，保持分页一致性
-        return new PageImpl<>(content, pageable,
-                requiredGenres == null || requiredGenres.size() <= 1
-                        ? page.getTotalElements()
-                        : content.size());
+        if (multiGenre) {
+            int total = content.size();
+            int from = Math.min(pageNo * size, total);
+            int to = Math.min(from + size, total);
+            return new PageImpl<>(content.subList(from, to), pageable, total);
+        }
+        return new PageImpl<>(content, pageable, page.getTotalElements());
     }
 
     /**
