@@ -812,6 +812,8 @@ body.dark .chart-toggle .toggle-btn.active { background: var(--surface-2); }
 .col-genres { color: var(--text-secondary); }
 .col-rating { font-weight: 700; font-variant-numeric: tabular-nums; }
 .col-votes { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+/* 评价人数：表头与数据一起右对齐，避免"表头靠左、数字靠右"的错位感 */
+.works-table thead th.col-votes { text-align: right; }
 .col-year { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 /* 评分分档配色 */

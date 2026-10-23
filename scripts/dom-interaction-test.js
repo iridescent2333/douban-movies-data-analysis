@@ -26,7 +26,7 @@ function canned(url) {
     director: '弗兰克·德拉邦特', leadActor: '蒂姆·罗宾斯 ; 摩根·弗里曼', genres: ['剧情', '犯罪'],
     country: '美国', posterUrl: 'https://img3.doubanio.com/x.webp', intro: '简介',
     releaseDate: '1994-09-10', seasonTag: '秋季档', duration: 142, link: 'https://movie.douban.com/subject/1292052/' };
-  if (u.includes('/api/types')) return { code: 0, msg: 'ok', data: ['剧情', '动作', '喜剧', '科幻'] };
+  if (u.includes('/api/types')) return { code: 0, msg: 'ok', data: ['剧情','爱情','喜剧','恐怖','悬疑','战争','历史','纪录片','动作','动画','奇幻','科幻'] };
   if (u.includes('/api/movies/filters')) return { code: 0, msg: 'ok', data: { years: [1994, 2000], countries: ['美国', '中国大陆', '中国香港'], genres: ['剧情', '动作'] } };
   if (u.includes('/api/stats/overview')) return { code: 0, msg: 'ok', data: {
     kpi: { movieCount: 2050, avgRating: 7.89, yearMin: 1931, yearMax: 2026, countryCount: 12 },
@@ -118,6 +118,30 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(500);
   check('F4 评分快捷下拉 → overview 带 ratingMin=8', (lastReq(u => u.includes('/api/stats/overview')) || '').includes('ratingMin=8'));
   check('快捷下拉写回首页自定义输入框', window.document.getElementById('homeRatingMin').value === '8');
+
+  console.log('\n[2.5] 连续改筛选（回归：第 2 次及以后必须生效，不能停在旧数据）');
+  // 曾经的 bug：第 1 次选类型后，syncFilterInputs 把值镜像写进影片库下拉；
+  // 第 2 次改首页类型时，collectFilterState 先读到影片库下拉里的旧值 → 发旧筛选 → 数据不更新。
+  requests.length = 0;
+  homeType.value = '战争'; fire(homeType, 'change');
+  await sleep(500);
+  const ov1 = lastReq(u => u.includes('/api/stats/overview'));
+  check('第 1 次选"战争" → overview 带 type=战争', !!ov1 && ov1.includes(encodeURIComponent('战争')), ov1);
+
+  requests.length = 0;
+  homeType.value = '科幻'; fire(homeType, 'change');
+  await sleep(500);
+  const ov2 = lastReq(u => u.includes('/api/stats/overview'));
+  check('第 2 次改选"科幻" → overview 必须带 type=科幻（不能还是战争）',
+    !!ov2 && ov2.includes(encodeURIComponent('科幻')) && !ov2.includes(encodeURIComponent('战争')), ov2);
+
+  requests.length = 0;
+  const hy2 = window.document.getElementById('homeYearStart');
+  hy2.value = '2000'; fire(hy2, 'input');
+  await sleep(500);
+  const ov3 = lastReq(u => u.includes('/api/stats/overview'));
+  check('第 3 次改年份 → overview 带 yearStart=2000 且保留 type=科幻',
+    !!ov3 && ov3.includes('yearStart=2000') && ov3.includes(encodeURIComponent('科幻')), ov3);
 
   console.log('\n[3] 影片库评分筛选（用户反馈：按评分查询无效）');
   // 切到影片库
