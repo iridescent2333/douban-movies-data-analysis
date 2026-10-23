@@ -560,13 +560,15 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
 .rank-cover .cover-rating { z-index: 2; }
 
 /* F9 表格行的海报缩略图 */
-.col-poster { width: 44px; }
+.col-poster { width: 60px; text-align: center; }
 .row-poster {
-  width: 32px;
-  height: 44px;
+  width: 60px;
+  height: auto;
+  aspect-ratio: 2 / 3;      /* 豆瓣海报 2:3 比例 → 每行海报等高，行高统一 */
   object-fit: cover;
   border-radius: 4px;
   display: block;
+  margin: 4px auto;
   background: var(--surface);
 }
 .rank-cover::after {
@@ -810,6 +812,8 @@ body.dark .chart-toggle .toggle-btn.active { background: var(--surface-2); }
 .col-genres { color: var(--text-secondary); }
 .col-rating { font-weight: 700; font-variant-numeric: tabular-nums; }
 .col-votes { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+/* 评价人数：表头与数据一起右对齐，避免"表头靠左、数字靠右"的错位感 */
+.works-table thead th.col-votes { text-align: right; }
 .col-year { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 /* 评分分档配色 */

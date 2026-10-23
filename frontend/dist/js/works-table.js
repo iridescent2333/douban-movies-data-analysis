@@ -21,6 +21,16 @@
       .replace(/'/g, '&#39;');
   }
 
+  /**
+   * 海报加载失败时的默认占位图（内联 SVG data-URI，无额外请求、永可达）。
+   * 60×90（2:3 豆瓣海报比例），与 .row-poster 尺寸一致，避免单元格塌陷。
+   */
+  var POSTER_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='60' height='90'>" +
+    "<rect width='60' height='90' rx='4' fill='#eaeef4'/>" +
+    "<path d='M24 33h12v24H24zM27 37v16M33 37v16' fill='none' stroke='#9aa4b2' stroke-width='1.4'/>" +
+    "</svg>");
+
   /** 切换表格 / 卡片视图 */
   function setView(next) {
     view = next === 'card' ? 'card' : 'table';
@@ -102,11 +112,13 @@
         var tr = document.createElement('tr');
         tr.dataset.id = m.id;
         tr.className = 'works-row';
-        // 缩略海报：走后端代理；加载失败隐藏 img，保留文字
-        var thumb = m.posterUrl
-          ? '<img class="row-poster" src="' + (global.APP_CONFIG.API_BASE + '/api/works/' + m.id + '/poster') +
-            '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">'
-          : '';
+        // 缩略海报：走后端代理；无海报或加载失败时回退到内置占位图，保持列宽与行高不塌陷
+        var posterSrc = m.posterUrl
+          ? (global.APP_CONFIG.API_BASE + '/api/works/' + m.id + '/poster')
+          : POSTER_PLACEHOLDER;
+        var thumb = '<img class="row-poster" src="' + posterSrc +
+          '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
+          'onerror="this.onerror=null;this.src=\'' + POSTER_PLACEHOLDER + '\'">';
         tr.innerHTML =
           '<td class="col-poster">' + thumb + '</td>' +
           '<td class="col-id">' + m.id + '</td>' +

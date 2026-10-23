@@ -49,6 +49,13 @@
     title: '',
   };
 
+  /**
+   * 当前正在编辑的筛选面板：'home'（首页左侧栏）或 'library'（影片库侧栏）。
+   * 两处面板是同一份 filterState 的镜像，回读时必须只认"用户正在改的这一块"，
+   * 否则会读到另一块被 sync 写入的旧值（见 collectFilterState 注释）。
+   */
+  var activeFilterPanel = 'home';
+
   /** 表格分页状态（1-based） */
   var pageState = { page: 1, size: PAGE_SIZE, total: 0 };
 
@@ -412,22 +419,27 @@
       refreshAll();
     }, CONFIG.DEBOUNCE_MS);
 
-    ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax', 'titleSearch'].forEach(function (id) {
+    // 绑定筛选输入：先记录"正在编辑的面板"，再触发防抖刷新。
+    // 不能共用一个不区分来源的 trigger——回读 filterState 时必须知道用户改的是哪块面板，
+    // 否则会读到另一块被 sync 写入的旧值（详见 collectFilterState）。
+    function bindFilterInput(id, evt, panel) {
       var el = document.getElementById(id);
-      if (el) el.addEventListener('input', trigger);
+      if (el) el.addEventListener(evt, function () { activeFilterPanel = panel; trigger(); });
+    }
+
+    // ---- 影片库侧栏 ----
+    ['yearStart', 'yearEnd', 'ratingMin', 'ratingMax', 'titleSearch'].forEach(function (id) {
+      bindFilterInput(id, 'input', 'library');
     });
-    var typeSel = document.getElementById('typeSelect');
-    if (typeSel) typeSel.addEventListener('change', trigger);
+    bindFilterInput('typeSelect', 'change', 'library');
 
     // ---- F1 首页左侧筛选面板（与影片库共用 filterState，双向同步） ----
     // 注意：首页评分输入框的 id 是 homeRatingMin/homeRatingMax（与影片库的 ratingMin/ratingMax 区分，
     // 重复 id 会让 getElementById 永远只命中第一个，导致影片库评分筛选"无效"）
     ['homeYearStart', 'homeYearEnd', 'homeRatingMin', 'homeRatingMax'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.addEventListener('input', trigger);
+      bindFilterInput(id, 'input', 'home');
     });
-    var homeTypeSel = document.getElementById('homeTypeSelect');
-    if (homeTypeSel) homeTypeSel.addEventListener('change', trigger);
+    bindFilterInput('homeTypeSelect', 'change', 'home');
 
     // F4 评分快捷区间下拉：写入自定义区间输入框
     var preset = document.getElementById('ratingPreset');
@@ -444,6 +456,7 @@
           if (lo) lo.value = '';
           if (hi) hi.value = '';
         }
+        activeFilterPanel = 'home';   // 快捷区间写的是首页输入框
         trigger();
       });
     }
@@ -485,14 +498,19 @@
   }
 
   function collectFilterState() {
-    // 影片库与首页筛选面板共享同一份状态：两处输入取"非空优先"
+    // 只回读"用户正在编辑的那块面板"的输入。
+    // 曾经的 bug：两处面板用 pickValue('typeSelect','homeTypeSelect') 取"第一个非空"，
+    // 而 syncFilterInputs 会把值镜像写进另一块面板；于是第 2 次改首页类型时，
+    // 先读到的影片库下拉已被写成上次的旧值 → 返回旧筛选 → 数据不更新（年份/评分同理）。
+    // 现在按 activeFilterPanel 认面板，读到的一定是用户本次的输入。
+    var home = activeFilterPanel === 'home';
     filterState = {
-      type: pickValue('typeSelect', 'homeTypeSelect'),
-      yearStart: pickNumber('yearStart', 'homeYearStart'),
-      yearEnd: pickNumber('yearEnd', 'homeYearEnd'),
-      ratingMin: pickNumber('ratingMin', 'homeRatingMin'),
-      ratingMax: pickNumber('ratingMax', 'homeRatingMax'),
-      title: pickValue('titleSearch', null),
+      type: pickValue(home ? 'homeTypeSelect' : 'typeSelect'),
+      yearStart: pickNumber(home ? 'homeYearStart' : 'yearStart'),
+      yearEnd: pickNumber(home ? 'homeYearEnd' : 'yearEnd'),
+      ratingMin: pickNumber(home ? 'homeRatingMin' : 'ratingMin'),
+      ratingMax: pickNumber(home ? 'homeRatingMax' : 'ratingMax'),
+      title: pickValue('titleSearch'),   // 标题搜索只在影片库侧栏
     };
     // 把状态同步回另一处的控件，避免两面板显示不一致
     syncFilterInputs();
@@ -677,6 +695,7 @@
       var kw = input.value.trim();
       switchPage('library');
       document.getElementById('titleSearch').value = kw;
+      activeFilterPanel = 'library';   // 顶栏搜索落在影片库侧栏
       collectFilterState();
       pageState.page = 1;
       refreshAll();
