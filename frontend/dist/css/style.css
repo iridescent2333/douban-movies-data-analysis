@@ -560,13 +560,15 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
 .rank-cover .cover-rating { z-index: 2; }
 
 /* F9 表格行的海报缩略图 */
-.col-poster { width: 44px; }
+.col-poster { width: 60px; text-align: center; }
 .row-poster {
-  width: 32px;
-  height: 44px;
+  width: 60px;
+  height: auto;
+  aspect-ratio: 2 / 3;      /* 豆瓣海报 2:3 比例 → 每行海报等高，行高统一 */
   object-fit: cover;
   border-radius: 4px;
   display: block;
+  margin: 4px auto;
   background: var(--surface);
 }
 .rank-cover::after {
