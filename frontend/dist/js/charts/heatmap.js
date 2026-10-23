@@ -69,15 +69,17 @@
         axisLabel: { fontSize: 12 },
       },
       visualMap: {
-        min: 6,
-        max: 9.5,
+        min: 5.5,
+        max: 9,
         calculable: true,
         orient: 'vertical',
         right: 10,
         top: 'center',
         inRange: {
-          // 低分青蓝 → 中分米白 → 高分橙红，比杂色带更易读
-          color: ['#5b8ff9', '#9ec2ff', '#f6f0c8', '#f6bd6a', '#e8684a', '#d7263d'],
+          // 低分冷蓝 → 青 → 金 → 橙 → 高分暖红，全程高饱和、无接近白色的中段。
+          // 曾经用 6~9.5 + 含米白中段的色带，而 70% 的格子落在 6.9~8.6（中段），
+          // 渲染成接近白色的浅色、融进白色背景，导致整张矩阵"看着像空白"。
+          color: ['#4c8ef7', '#22b8a6', '#e8c33c', '#f5822b', '#e5493a'],
         },
         textStyle: { fontSize: 11 },
         text: ['高分', '低分'],
@@ -86,9 +88,12 @@
         name: '平均评分',
         type: 'heatmap',
         data: heatData,
+        // 格子描边：即使某格颜色偏浅，也能看清网格结构，不会糊成一片白
+        itemStyle: { borderColor: 'rgba(255, 255, 255, 0.85)', borderWidth: 1 },
         label: {
           show: true,
           fontSize: 11,
+          color: '#333',
           formatter: function (p) {
             return p.value[2] != null ? p.value[2].toFixed(1) : '';
           },
