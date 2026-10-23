@@ -1,10 +1,10 @@
 /**
  * heatmap.js —— 图-4 地区 × 类型 热力矩阵
- * 数据格式期望：
+ * 数据格式期望（由 main.js 的 transformHeatmap 产出）：
  *   {
- *     countries: ['中国','美国',...],
- *     genres:   ['动作','喜剧',...],
- *     data:     [[0,0,7.2],[0,1,6.8],...]  每项=[countryIndex, genreIndex, avgRating]
+ *     countries: ['中国大陆',...,'俄罗斯'],   // 10 个核心地区 → y 轴
+ *     genres:   ['剧情',...,'科幻'],          // 12 个核心类型 → x 轴
+ *     data:     [[genreIdx, regionIdx, avgRating, count], ...]
  *   }
  */
 (function (global) {
@@ -35,9 +35,13 @@
 
     // ECharts heatmap 数据格式：[xIndex, yIndex, value]
     // x 轴放 genre，y 轴放 country（符合"地区×类型"的阅读习惯）
+    // transformHeatmap 给出的每项是 [genreIndex, regionIndex, avgRating, count]，
+    // 直接按 [x=genreIdx, y=regionIdx] 摆放即可（曾误写成 [d[1],d[0],...] 把两轴对调，
+    // 导致 genreIndex(0~11) 当成 y 去撞只有 10 项的 country 轴，奇幻/科幻两列越界丢失、
+    // 且整张矩阵转置错位）。
     // 第 4 维是该格的影片数量，用于 tooltip 展示
     var heatData = (data.data || []).map(function (d) {
-      return [d[1], d[0], d[2], d[3]];
+      return [d[0], d[1], d[2], d[3]];
     });
 
     var option = {
