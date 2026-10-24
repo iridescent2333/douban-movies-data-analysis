@@ -1,10 +1,10 @@
 /**
  * heatmap.js —— 图-4 地区 × 类型 热力矩阵
- * 数据格式期望：
+ * 数据格式期望（由 main.js 的 transformHeatmap 产出）：
  *   {
- *     countries: ['中国','美国',...],
- *     genres:   ['动作','喜剧',...],
- *     data:     [[0,0,7.2],[0,1,6.8],...]  每项=[countryIndex, genreIndex, avgRating]
+ *     countries: ['中国大陆',...,'俄罗斯'],   // 10 个核心地区 → y 轴
+ *     genres:   ['剧情',...,'科幻'],          // 12 个核心类型 → x 轴
+ *     data:     [[genreIdx, regionIdx, avgRating, count], ...]
  *   }
  */
 (function (global) {
@@ -35,9 +35,13 @@
 
     // ECharts heatmap 数据格式：[xIndex, yIndex, value]
     // x 轴放 genre，y 轴放 country（符合"地区×类型"的阅读习惯）
+    // transformHeatmap 给出的每项是 [genreIndex, regionIndex, avgRating, count]，
+    // 直接按 [x=genreIdx, y=regionIdx] 摆放即可（曾误写成 [d[1],d[0],...] 把两轴对调，
+    // 导致 genreIndex(0~11) 当成 y 去撞只有 10 项的 country 轴，奇幻/科幻两列越界丢失、
+    // 且整张矩阵转置错位）。
     // 第 4 维是该格的影片数量，用于 tooltip 展示
     var heatData = (data.data || []).map(function (d) {
-      return [d[1], d[0], d[2], d[3]];
+      return [d[0], d[1], d[2], d[3]];
     });
 
     var option = {
@@ -65,15 +69,17 @@
         axisLabel: { fontSize: 12 },
       },
       visualMap: {
-        min: 6,
-        max: 9.5,
+        min: 5.5,
+        max: 9,
         calculable: true,
         orient: 'vertical',
         right: 10,
         top: 'center',
         inRange: {
-          // 低分青蓝 → 中分米白 → 高分橙红，比杂色带更易读
-          color: ['#5b8ff9', '#9ec2ff', '#f6f0c8', '#f6bd6a', '#e8684a', '#d7263d'],
+          // 低分冷蓝 → 青 → 金 → 橙 → 高分暖红，全程高饱和、无接近白色的中段。
+          // 曾经用 6~9.5 + 含米白中段的色带，而 70% 的格子落在 6.9~8.6（中段），
+          // 渲染成接近白色的浅色、融进白色背景，导致整张矩阵"看着像空白"。
+          color: ['#4c8ef7', '#22b8a6', '#e8c33c', '#f5822b', '#e5493a'],
         },
         textStyle: { fontSize: 11 },
         text: ['高分', '低分'],
@@ -82,9 +88,12 @@
         name: '平均评分',
         type: 'heatmap',
         data: heatData,
+        // 格子描边：即使某格颜色偏浅，也能看清网格结构，不会糊成一片白
+        itemStyle: { borderColor: 'rgba(255, 255, 255, 0.85)', borderWidth: 1 },
         label: {
           show: true,
           fontSize: 11,
+          color: '#333',
           formatter: function (p) {
             return p.value[2] != null ? p.value[2].toFixed(1) : '';
           },

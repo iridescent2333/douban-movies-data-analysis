@@ -141,6 +141,28 @@ check(!Charts.costBenefit && !Charts.regionCulture,
   '成本效益 / 地域文化图表已按需求移除');
 check(!!Charts.topWorksBar, 'F7 横向柱状图模块已回归（课程要求）');
 
+/* ---------- 2.5 热力图轴对齐回归（曾经 x/y 对调导致越界+转置） ---------- */
+console.log('[2.5] 热力图 地区×类型 轴对齐');
+const HM_TYPES = ['剧情','爱情','喜剧','恐怖','悬疑','战争','历史','纪录片','动作','动画','奇幻','科幻'];
+const HM_REGIONS = ['中国大陆','中国台湾','中国香港','美国','日本','韩国','英国','法国','德国','俄罗斯'];
+const hmData = [];
+HM_TYPES.forEach((g, gi) => HM_REGIONS.forEach((c, ri) => {
+  if ((gi + ri) % 3 === 0) hmData.push([gi, ri, 6 + (gi % 4) * 0.5, (gi + 1) * (ri + 1)]);
+}));
+hmData.push([11, 9, 7.2, 5]);   // 边界点：类型索引 11=科幻、地区索引 9=俄罗斯
+Charts.heatmap.render({ countries: HM_REGIONS, genres: HM_TYPES, data: hmData });
+const hmRec = global.__charts[global.__charts.length - 1];
+const hmOpt = hmRec.options[hmRec.options.length - 1];
+const hmGLen = hmOpt.xAxis.data.length, hmCLen = hmOpt.yAxis.data.length;
+const hmPts = hmOpt.series[0].data;
+let hmOob = 0;
+hmPts.forEach((p) => { if (p[0] < 0 || p[0] >= hmGLen || p[1] < 0 || p[1] >= hmCLen) hmOob++; });
+check(hmGLen === 12 && hmCLen === 10, `热力图轴 x=12 类型 / y=10 地区（实际 ${hmGLen}/${hmCLen}）`);
+check(hmOob === 0, `热力图 ${hmPts.length} 个数据点全部落在轴范围内（越界 ${hmOob}）`);
+const hmBoundary = hmPts.find((p) => p[2] === 7.2);
+check(!!hmBoundary && hmOpt.xAxis.data[hmBoundary[0]] === '科幻' && hmOpt.yAxis.data[hmBoundary[1]] === '俄罗斯',
+  '热力图边界点 [11,9] → 科幻 × 俄罗斯（证明 x/y 未转置）');
+
 /* ---------- 3. 排行榜（豆瓣式卡片） ---------- */
 console.log('[3] 排行榜卡片渲染');
 const rankData = [
