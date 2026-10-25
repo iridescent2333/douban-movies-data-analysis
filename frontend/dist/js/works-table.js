@@ -52,7 +52,7 @@
       if (placeholder) {
         placeholder.hidden = false;
         placeholder.textContent = message || '加载中...';
-        placeholder.className = 'table-placeholder';
+        placeholder.className = 'table-placeholder is-loading';
       }
       return;
     }

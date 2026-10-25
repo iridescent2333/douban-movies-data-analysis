@@ -10,7 +10,7 @@
   <!-- 加载器：本地文件缺失时自动回退多个 CDN 镜像；全部失败会广播 echarts:error 给出明确提示 -->
   <script src="js/echarts-loader.js?v=20261023a"></script>
 
-  <link rel="stylesheet" href="css/style.css?v=20261023c" />
+  <link rel="stylesheet" href="css/style.css?v=20261025c" />
 </head>
 <body>
 
@@ -71,6 +71,8 @@
       <div class="topbar-title" id="pageTitle">首页</div>
       <div class="topbar-actions">
         <div class="topbar-search">
+          <!-- 任务2：输入框内左侧搜索图标（绝对定位，垂直居中） -->
+          <span class="search-icon" aria-hidden="true">🔍</span>
           <input type="text" id="globalSearch" placeholder="搜索电影标题，回车跳转影片库" />
         </div>
         <button id="themeToggle" class="theme-toggle" title="切换明暗主题" aria-label="切换明暗主题">🌙</button>
@@ -81,46 +83,49 @@
 
       <!-- ==================== 首页 ==================== -->
       <section class="page active" id="page-home">
-        <div class="home-layout">
-          <!-- F1 左侧筛选区：驱动首页图表（与影片库共用同一套全局筛选） -->
-          <aside class="filter-panel">
-            <div class="filter-panel-title">筛选条件</div>
+        <!-- 任务3：F1 筛选面板移出左侧栏，横向铺开在「首页」标题正下方，
+             与下方 KPI / 图表卡片区域完全对齐（flex 布局，可换行） -->
+        <aside class="filter-panel">
+          <div class="filter-panel-title">筛选条件</div>
 
-            <!-- F2 类型筛选：下拉框 -->
-            <div class="filter-block">
-              <label for="homeTypeSelect">类型</label>
-              <select id="homeTypeSelect"><option value="">全部类型</option></select>
-            </div>
+          <!-- F2 类型筛选：下拉框 -->
+          <div class="filter-block">
+            <label for="homeTypeSelect">类型</label>
+            <select id="homeTypeSelect"><option value="">全部类型</option></select>
+          </div>
 
-            <!-- F3 年份区间筛选 -->
-            <div class="filter-block">
-              <label>年份区间</label>
+          <!-- F3 年份区间筛选（横向排列；联动上方「年代跨度」KPI） -->
+          <div class="filter-block">
+            <label>年份区间</label>
+            <div class="range-inputs">
               <input type="number" id="homeYearStart" placeholder="起始年" />
+              <span>—</span>
               <input type="number" id="homeYearEnd" placeholder="结束年" />
             </div>
+          </div>
 
-            <!-- F4 评分筛选：下拉快捷区间 + 自定义 -->
-            <div class="filter-block">
-              <label for="ratingPreset">评分区间</label>
-              <select id="ratingPreset">
-                <option value="">全部评分</option>
-                <option value="8-10">8 分以上</option>
-                <option value="7-8">7 – 8 分</option>
-                <option value="6-7">6 – 7 分</option>
-                <option value="0-6">6 分以下</option>
-              </select>
-              <div class="range-inputs">
-                <input type="number" id="homeRatingMin" min="0" max="10" step="0.1" placeholder="最低" />
-                <span>—</span>
-                <input type="number" id="homeRatingMax" min="0" max="10" step="0.1" placeholder="最高" />
-              </div>
+          <!-- F4 评分筛选：下拉快捷区间 + 自定义 -->
+          <div class="filter-block">
+            <label for="ratingPreset">评分区间</label>
+            <select id="ratingPreset">
+              <option value="">全部评分</option>
+              <option value="8-10">8 分以上</option>
+              <option value="7-8">7 – 8 分</option>
+              <option value="6-7">6 – 7 分</option>
+              <option value="0-6">6 分以下</option>
+            </select>
+            <div class="range-inputs">
+              <input type="number" id="homeRatingMin" min="0" max="10" step="0.1" placeholder="最低" />
+              <span>—</span>
+              <input type="number" id="homeRatingMax" min="0" max="10" step="0.1" placeholder="最高" />
             </div>
+          </div>
 
-            <button id="homeResetBtn" class="btn-reset">重置筛选</button>
-            <p class="filter-note">筛选条件全局生效：首页图表、影片库表格同步刷新</p>
-          </aside>
+          <button id="homeResetBtn" class="btn-reset">重置筛选</button>
+          <p class="filter-note">筛选条件全局生效：首页图表、影片库表格同步刷新</p>
+        </aside>
 
-          <div class="home-main">
+        <div class="home-main">
         <div class="kpi-grid">
           <div class="kpi-card">
             <div class="kpi-label">电影总数</div>
@@ -135,7 +140,8 @@
           <div class="kpi-card">
             <div class="kpi-label">年代跨度</div>
             <div class="kpi-value kpi-value-sm" id="kpiYearSpan">-</div>
-            <div class="kpi-foot">覆盖 31 年</div>
+            <!-- 任务1：覆盖年数改为动态计算（id 供 JS 更新），不再是写死的 31 -->
+            <div class="kpi-foot" id="kpiYearSpanFoot">-</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-label">国家 / 地区</div>
@@ -169,8 +175,7 @@
           </div>
           <div class="rank-list rank-list-compact" id="homeRanking"></div>
         </div>
-          </div><!-- /home-main -->
-        </div><!-- /home-layout -->
+        </div><!-- /home-main -->
       </section>
 
       <!-- ==================== 综合热榜 ==================== -->
@@ -368,7 +373,7 @@
 <!-- ========== JS 文件（按依赖顺序加载） ========== -->
 <script src="js/config.js?v=20261023a"></script>
 <!-- 设计令牌：CSS 变量与 ECharts 主题同源，UI 调优只改 theme.js -->
-<script src="js/theme.js?v=20261023a"></script>
+<script src="js/theme.js?v=20261025a"></script>
 <!-- 图表声明表：新增图表在这里加一行 -->
 <script src="js/chart-config.js?v=20261023a"></script>
 <script src="js/utils/debounce.js?v=20261023a"></script>
@@ -387,10 +392,10 @@
 <script src="js/charts/topDirectors.js?v=20261023a"></script>
 
 <!-- 排行榜卡片（豆瓣式：封面/标题/年份/导演/主演/梗概） -->
-<script src="js/ranking.js?v=20261023a"></script>
+<script src="js/ranking.js?v=20261025a"></script>
 <!-- F9 作品表格/卡片 -->
-<script src="js/works-table.js?v=20261023b"></script>
+<script src="js/works-table.js?v=20261025a"></script>
 <!-- 主入口：菜单路由 + 各页面数据加载 -->
-<script src="js/main.js?v=20261023c"></script>
+<script src="js/main.js?v=20261025c"></script>
 </body>
 </html>
