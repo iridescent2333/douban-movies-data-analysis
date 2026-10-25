@@ -104,6 +104,17 @@
       visualMap: {
         textStyle: { color: sub, fontSize: 11 },
       },
+      /* 批次4 · 系列级美化（全图表统一生效）：
+         柱状图 3px 小圆角（横竖向都自然）；折线平滑 + 加粗 + 圆点 */
+      bar: {
+        itemStyle: { borderRadius: 3 },
+      },
+      line: {
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { width: 3 },
+      },
     };
   }
 
@@ -129,6 +140,9 @@
       tooltip: { trigger: 'axis' },
       animationDuration: 420,
       animationEasing: 'cubicOut',
+      /* 数据更新时的过渡动画：筛选/切换时图表平滑变形而非生硬跳变 */
+      animationDurationUpdate: 320,
+      animationEasingUpdate: 'cubicOut',
     };
   }
 

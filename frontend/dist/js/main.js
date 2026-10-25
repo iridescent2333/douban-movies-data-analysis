@@ -229,8 +229,63 @@
       kpi.avgRating != null ? (+kpi.avgRating).toFixed(2) : '-';
     document.getElementById('kpiYearSpan').textContent =
       (kpi.yearMin && kpi.yearMax) ? (kpi.yearMin + ' ~ ' + kpi.yearMax) : '-';
+    // 任务1：「覆盖 N 年」不再写死，跟随实际数据跨度动态计算
+    var spanFoot = document.getElementById('kpiYearSpanFoot');
+    if (spanFoot) {
+      spanFoot.textContent = (kpi.yearMin && kpi.yearMax)
+        ? ('覆盖 ' + (kpi.yearMax - kpi.yearMin) + ' 年')
+        : '覆盖 - 年';
+    }
     document.getElementById('kpiCountries').textContent =
       kpi.countryCount != null ? kpi.countryCount : '-';
+  }
+
+  /* ============================================================
+   * 3.1 任务1：「年代跨度」KPI 与起始年 / 结束年输入框联动
+   * ============================================================ */
+
+  /**
+   * 安全读取年份输入：空 / 非数字 / 超出合理年份范围一律返回 null（不予计算）
+   */
+  function readYearInput(id) {
+    var el = document.getElementById(id);
+    if (!el) return null;
+    var v = String(el.value).trim();
+    if (v === '') return null;
+    var n = +v;
+    if (!isFinite(n)) return null;      // 非数字（如 'e'、乱输入）
+    n = Math.round(n);
+    if (n < 1900 || n > 2100) return null;   // 明显不是有效年份
+    return n;
+  }
+
+  /**
+   * 起始年 / 结束年变化时联动更新「年代跨度」KPI：
+   *   - 两个年份都有效且 起始年 <= 结束年 → 显示 "起始年 ~ 结束年"，覆盖 结束年-起始年 年
+   *   - 输入为空 / 非数字 / 起始年大于结束年 → 不报错，回退到当前数据的真实跨度
+   */
+  function updateYearSpanKpi() {
+    var spanEl = document.getElementById('kpiYearSpan');
+    if (!spanEl) return;
+    var footEl = document.getElementById('kpiYearSpanFoot');
+
+    var start = readYearInput('homeYearStart');
+    var end = readYearInput('homeYearEnd');
+
+    var min, max;
+    if (start != null && end != null && start <= end) {
+      min = start;
+      max = end;
+    } else {
+      // 边界处理：回退到数据真实跨度（当前筛选生效的 overview 缓存，无缓存则不动）
+      var kpi = (lastOverview && lastOverview.kpi) || {};
+      min = kpi.yearMin != null ? kpi.yearMin : null;
+      max = kpi.yearMax != null ? kpi.yearMax : null;
+      if (min == null || max == null) return;   // 无可用的默认值，保持现状不报错
+    }
+
+    spanEl.textContent = min + ' ~ ' + max;
+    if (footEl) footEl.textContent = '覆盖 ' + (max - min) + ' 年';
   }
 
   /* ============================================================
@@ -440,6 +495,13 @@
       bindFilterInput(id, 'input', 'home');
     });
     bindFilterInput('homeTypeSelect', 'change', 'home');
+
+    // 任务1：起始年 / 结束年输入时（input 事件）立即联动「年代跨度」KPI，
+    // 不等防抖——即时反馈；数值合法性由 readYearInput / updateYearSpanKpi 兜底
+    ['homeYearStart', 'homeYearEnd'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', updateYearSpanKpi);
+    });
 
     // F4 评分快捷区间下拉：写入自定义区间输入框
     var preset = document.getElementById('ratingPreset');
@@ -936,6 +998,11 @@
   function bindThemeToggle() {
     var btn = document.getElementById('themeToggle');
     if (!btn) return;
+    /* 支持 ?theme=dark 直达暗色主题（分享链接 / 自动化截图可用） */
+    if (new URLSearchParams(location.search).get('theme') === 'dark') {
+      document.body.classList.add('dark');
+      Registry.applyTheme();
+    }
     var refreshIcon = function () {
       btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
     };

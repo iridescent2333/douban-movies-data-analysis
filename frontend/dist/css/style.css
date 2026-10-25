@@ -18,6 +18,14 @@
   --blue: #00aeec;
   --blue-soft: rgba(0, 174, 236, 0.10);
 
+  /* 语义强调色：榜单名次 / 评分 / 状态，全站统一从这里取 */
+  --orange: #ff8f1f;   /* 评分数字、榜单亚军 */
+  --gold: #f2c94c;     /* 榜单季军、Toast 警示 */
+  --flame: #ff5722;    /* 榜单冠军、高分档 */
+  --star: #ffd166;     /* 海报上的评分徽标 */
+  --purple: #9b51e0;   /* KPI 第四卡装饰条 */
+  --danger: #e04040;   /* 错误态 */
+
   --bg: #f6f7f8;
   --card-bg: #ffffff;
   --surface: #f1f2f3;
@@ -50,6 +58,10 @@ body.dark {
   --primary-hover: #ff9dbd;
   --primary-soft: rgba(251, 114, 153, 0.16);
   --primary-softer: rgba(251, 114, 153, 0.08);
+
+  /* 暗色下强调色微调：提高明度，避免在深底上发闷 */
+  --flame: #ff8a65;
+  --danger: #ff7a7a;
 
   --bg: #17181a;
   --card-bg: #1f2022;
@@ -231,6 +243,8 @@ a:hover { color: var(--primary-hover); }
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .topbar-title::before {
   content: "";
@@ -240,10 +254,22 @@ a:hover { color: var(--primary-hover); }
   background: var(--primary);
 }
 .topbar-actions { display: flex; align-items: center; gap: 12px; }
+/* 任务2：搜索框加 🔍 图标 —— 相对/绝对定位实现，图标垂直居中、不可点击穿透 */
+.topbar-search { position: relative; display: inline-flex; align-items: center; }
+.topbar-search .search-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;   /* 不挡输入框聚焦/点击 */
+  z-index: 1;
+}
 .topbar-search input {
   width: 260px;
   height: 34px;
-  padding: 0 14px;
+  padding: 0 14px 0 34px;   /* 左侧加宽 padding，避免文字与图标重叠 */
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
@@ -297,24 +323,21 @@ a:hover { color: var(--primary-hover); }
 .page-desc { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
 
 /* ============================================================
- * 首页布局：左侧筛选面板（F1）+ 右侧图表区
+ * 首页布局（任务3）：筛选面板（F1）移出左侧栏，横向铺开于
+ * 「首页」标题正下方，宽度与下方 KPI / 图表卡片区域完全对齐。
+ * 左侧不再有筛选面板，侧边栏只保留菜单（全高，无突兀空白）。
  * ============================================================ */
-.home-layout {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 16px;
-  align-items: start;
-}
 .filter-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
-  position: sticky;
-  top: calc(var(--topbar-h) + 16px);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 14px 18px;
+  margin-bottom: 16px;
 }
 .filter-panel-title {
   font-size: 14px;
@@ -322,9 +345,11 @@ a:hover { color: var(--primary-hover); }
   padding-left: 8px;
   border-left: 3px solid var(--primary);
   line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.filter-block { display: flex; flex-direction: column; gap: 5px; }
-.filter-block > label { font-size: 12px; color: var(--text-muted); }
+.filter-block { display: flex; align-items: center; gap: 8px; }
+.filter-block > label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 .filter-block select,
 .filter-block input {
   height: 32px;
@@ -334,15 +359,20 @@ a:hover { color: var(--primary-hover); }
   background: var(--surface);
   color: var(--text-primary);
   outline: none;
-  width: 100%;
   transition: border-color var(--transition);
+  min-width: 120px;
 }
 .filter-block select:focus,
 .filter-block input:focus { border-color: var(--primary); }
-.filter-panel .range-inputs { display: flex; gap: 4px; align-items: center; }
+.filter-panel .range-inputs { display: flex; gap: 6px; align-items: center; }
 .filter-panel .range-inputs span { color: var(--text-muted); }
-.filter-panel .btn-reset { width: 100%; }
-.filter-note { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+.filter-panel .range-inputs input { min-width: 88px; width: 88px; }
+.filter-panel .btn-reset { flex-shrink: 0; }
+.filter-note { font-size: 11px; color: var(--text-muted); line-height: 1.6; margin-left: auto; }
+/* 窄屏时提示语换行占满一行，不挤筛选控件 */
+@media (max-width: 1100px) {
+  .filter-note { margin-left: 0; flex-basis: 100%; }
+}
 
 /* 详情弹窗：真实海报大图（加载失败露出渐变底 + 标题） */
 .detail-poster {
@@ -405,8 +435,8 @@ a:hover { color: var(--primary-hover); }
   background: var(--primary);
 }
 .kpi-card:nth-child(2)::before { background: var(--blue); }
-.kpi-card:nth-child(3)::before { background: #f2c94c; }
-.kpi-card:nth-child(4)::before { background: #9b51e0; }
+.kpi-card:nth-child(3)::before { background: var(--gold); }
+.kpi-card:nth-child(4)::before { background: var(--purple); }
 .kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
 .kpi-label { font-size: 13px; color: var(--text-secondary); }
 .kpi-value {
@@ -478,9 +508,9 @@ a:hover { color: var(--primary-hover); }
 .chart-body.empty::after { content: "暂无数据"; }
 .chart-body.error::after {
   content: "图表加载失败，请检查 vendor/echarts.min.js 或网络";
-  color: #e04040;
+  color: var(--danger);
 }
-body.dark .chart-body.error::after { color: #ff7a7a; }
+body.dark .chart-body.error::after { color: var(--danger); }
 
 /* ============================================================
  * 排行榜（豆瓣/B 站风格：封面 + 排名 + 信息）
@@ -522,9 +552,9 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
   padding-top: 4px;
   font-variant-numeric: tabular-nums;
 }
-.rank-no.top1 { color: #ff5722; }
-.rank-no.top2 { color: #ff8f1f; }
-.rank-no.top3 { color: #f2c94c; }
+.rank-no.top1 { color: var(--flame); }
+.rank-no.top2 { color: var(--orange); }
+.rank-no.top3 { color: var(--gold); }
 
 /* 封面：优先显示后端代理的真实豆瓣海报（img），渐变作为加载兜底背景 */
 .rank-cover {
@@ -552,7 +582,7 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%);
+  background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.45) 100%);
   z-index: 1;
   pointer-events: none;
 }
@@ -570,12 +600,6 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
   display: block;
   margin: 4px auto;
   background: var(--surface);
-}
-.rank-cover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.45) 100%);
 }
 .cover-title {
   position: relative;
@@ -596,7 +620,7 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
   top: 6px;
   z-index: 1;
   background: rgba(0, 0, 0, 0.55);
-  color: #ffd166;
+  color: var(--star);
   font-size: 12px;
   font-weight: 700;
   padding: 1px 6px;
@@ -625,14 +649,14 @@ body.dark .chart-body.error::after { color: #ff7a7a; }
 .rank-rating {
   font-size: 14px;
   font-weight: 700;
-  color: #ff8f1f;
+  color: var(--orange);
   font-variant-numeric: tabular-nums;
 }
 .rank-votes { font-size: 12px; color: var(--text-muted); }
-.rank-meta { font-size: 12.5px; color: var(--text-secondary); }
+.rank-meta { font-size: 12px; color: var(--text-secondary); }
 .rank-meta b { color: var(--text-primary); font-weight: 500; }
 .rank-intro {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-muted);
   line-height: 1.6;
   display: -webkit-box;
@@ -817,12 +841,11 @@ body.dark .chart-toggle .toggle-btn.active { background: var(--surface-2); }
 .col-year { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 /* 评分分档配色 */
-.rating-top { color: #ff5722; }
+.rating-top { color: var(--flame); }
 .rating-high { color: var(--primary); }
 .rating-mid { color: var(--text-primary); }
 .rating-low { color: var(--text-muted); }
-body.dark .rating-top { color: #ff8a65; }
-body.dark .rating-high { color: #ff9dbd; }
+body.dark .rating-high { color: var(--primary-hover); }
 
 .table-placeholder {
   padding: 40px;
@@ -830,8 +853,8 @@ body.dark .rating-high { color: #ff9dbd; }
   color: var(--text-muted);
   font-size: 13px;
 }
-.table-placeholder.error { color: #e04040; }
-body.dark .table-placeholder.error { color: #ff7a7a; }
+.table-placeholder.error { color: var(--danger); }
+body.dark .table-placeholder.error { color: var(--danger); }
 
 .table-pager {
   display: flex;
@@ -923,14 +946,14 @@ body.dark .table-placeholder.error { color: #ff7a7a; }
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
-  color: #ffd04d;
-  font-size: 12.5px;
+  color: var(--star);
+  font-size: 12px;
   font-weight: 700;
 }
 .card-rating.rating-top { color: #ff6b6b; }
 .movie-info { padding: 10px 12px 12px; }
 .movie-title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -945,7 +968,7 @@ body.dark .table-placeholder.error { color: #ff7a7a; }
   white-space: nowrap;
 }
 .card-votes { float: right; color: var(--text-muted); }
-.movie-rating { color: #ff8f1f; font-weight: 700; font-size: 13px; }
+.movie-rating { color: var(--orange); font-weight: 700; font-size: 13px; }
 
 /* ============================================================
  * 详情模态框
@@ -1017,7 +1040,7 @@ body.dark .table-placeholder.error { color: #ff7a7a; }
 .detail-cover .cover-rating { font-size: 14px; right: 10px; top: 10px; }
 .detail-info { flex: 1; min-width: 0; }
 .detail-info h3 { font-size: 20px; margin-bottom: 10px; }
-.detail-info p { font-size: 13.5px; color: var(--text-secondary); margin-bottom: 5px; }
+.detail-info p { font-size: 13px; color: var(--text-secondary); margin-bottom: 5px; }
 .detail-info p strong { color: var(--text-primary); font-weight: 600; }
 .detail-intro {
   margin-top: 10px;
@@ -1052,8 +1075,8 @@ body.dark .table-placeholder.error { color: #ff7a7a; }
   max-width: 360px;
 }
 .toast.success { border-left: 3px solid var(--primary); }
-.toast.warning { border-left: 3px solid #f2c94c; }
-.toast.error { border-left: 3px solid #e04040; }
+.toast.warning { border-left: 3px solid var(--gold); }
+.toast.error { border-left: 3px solid var(--danger); }
 
 /* ============================================================
  * 页脚
@@ -1075,6 +1098,10 @@ body.dark .table-placeholder.error { color: #ff7a7a; }
   .panel-row { grid-template-columns: 1fr; }
   .movie-grid { grid-template-columns: repeat(4, 1fr); }
   .topbar-search input { width: 180px; }
+}
+/* 中窄屏：搜索框让位给标题，避免标题被挤压换行 */
+@media (max-width: 1100px) {
+  .topbar-search { display: none; }
 }
 @media (max-width: 960px) {
   :root { --sidebar-w: 64px; }
@@ -1186,3 +1213,59 @@ body.dark .table-placeholder.error { color: #ff7a7a; }
 
 /* 页头描述行：分隔更清晰 */
 .page-head { border-bottom: 1px solid var(--border-light); padding-bottom: 12px; }
+
+/* ============================================================
+ * 批次3：加载 / 空状态美化
+ * 原则：加载态给"动"（转圈），空态给"静"（图标）；靠 .is-loading 区分
+ * ============================================================ */
+@keyframes uiSpin { to { transform: rotate(360deg); } }
+
+/* 图表加载中：转圈叠在"加载中..."文字上方 */
+.chart-body.loading::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -32px 0 0 -13px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: uiSpin 0.8s linear infinite;
+  z-index: 2;
+}
+
+/* 表格加载中：文字前的行内小转圈 */
+.table-placeholder.is-loading::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: uiSpin 0.8s linear infinite;
+}
+
+/* 榜单加载中：居中大转圈；空结果：胶片图标 */
+.rank-empty.is-loading::before {
+  content: "";
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: 0 auto 10px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: uiSpin 0.8s linear infinite;
+}
+.rank-empty:not(.is-loading)::before {
+  content: "🎬";
+  display: block;
+  font-size: 30px;
+  margin-bottom: 8px;
+  opacity: 0.45;
+}

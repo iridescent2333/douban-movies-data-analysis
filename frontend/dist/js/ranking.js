@@ -130,7 +130,7 @@
   /** 加载态 */
   function setLoading(containerId, text) {
     var box = document.getElementById(containerId);
-    if (box) box.innerHTML = '<div class="rank-empty">' + escapeHtml(text || '加载中...') + '</div>';
+    if (box) box.innerHTML = '<div class="rank-empty is-loading">' + escapeHtml(text || '加载中...') + '</div>';
   }
 
   global.Ranking = {
